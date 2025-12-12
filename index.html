@@ -106,8 +106,9 @@
             background: var(--ok);
         }
 
+        /* New button style for Log Out */
         .logoutBtn {
-            background: #616161;
+            background: #616161; /* Darker gray for contrast */
             margin-top: 10px;
         }
 
@@ -190,8 +191,10 @@
             border: 1px solid #ccc;
         }
 
+        /* --- New/Modified Styles for Login and Image --- */
         #app-content {
             display: none;
+            /* Hide the app initially */
         }
 
         .login-box {
@@ -231,16 +234,20 @@
             border: 1px solid #ddd;
         }
 
+        /* --- CSS to remove up/down arrows from number input (Employee ID) --- */
+        /* For Chrome, Safari, Edge, Opera */
         #employeeId::-webkit-outer-spin-button,
         #employeeId::-webkit-inner-spin-button {
             -webkit-appearance: none;
             margin: 0;
         }
 
+        /* For Firefox */
         #employeeId[type=number] {
             -moz-appearance: textfield;
         }
 
+        /* Dark mode styles */
         body.dark-mode {
             --bg: #121212;
             --card: #1e1e1e;
@@ -271,6 +278,10 @@
 
         body.dark-mode .metric {
             background: #2d2d2d;
+        }
+
+        body.dark-mode .metric div:not(.small) {
+            color: #ffffff !important;
         }
 
         body.dark-mode .progress-wrap {
@@ -305,6 +316,33 @@
             border: 1px solid #444;
         }
 
+        /* FIX: Ensure numbers in summary boxes are visible in dark mode */
+        body.dark-mode #totalPoured,
+        body.dark-mode #ladleRem,
+        body.dark-mode #metricFlow,
+        body.dark-mode #metricMass,
+        body.dark-mode #metricPlate,
+        body.dark-mode #metricRem {
+            color: #ffffff !important;
+        }
+
+        /* FIX: Style for summary boxes */
+        body.dark-mode div[style*="background:#f8fbff"],
+        body.dark-mode div[style*="background:#fff8f0"] {
+            background: #2d2d2d !important;
+        }
+
+        body.dark-mode div[style*="background:#f8fbff"] div:not(.small),
+        body.dark-mode div[style*="background:#fff8f0"] div:not(.small) {
+            color: #ffffff !important;
+            font-weight: 600;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
     </style>
 </head>
 
@@ -328,8 +366,11 @@
             </div>
         </div>
 
+
         <div id="app-content">
 
+           
+            
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h1>Flow Rate Monitoring App</h1>
                 <div class="header-buttons">
@@ -337,11 +378,55 @@
                     <button id="logoutBtn" class="logoutBtn" style="width: 120px; margin-top: 0;">LOG OUT</button>
                 </div>
             </div>
-
+            
             <div class="grid">
                 <div class="card">
-                    <!-- Pre-casting & Pouring control content here -->
-                    <!-- same as your original code -->
+                    <h3>1) Pre-casting Setup</h3>
+                    <label>Heat No.</label><input id="heatNo" type="text">
+                    <label>Ladle ID</label><input id="ladleId" type="text">
+                    <div class="row">
+                        <div><label>LM for cast (tons)</label><input id="ladleWeight" type="number" step="0.1"></div>
+                        <div><label>Steel Density (kg/m3)</label><input id="density" type="number" step="1"
+                                value="7040"></div>
+                    </div>
+                    <h4 style="margin-top:10px;">Plate Targets</h4>
+                    <div class="row">
+                        <div><label>Plate A Target Weight (tons)</label><input id="plateA_target" type="number"
+                                step="0.1"></div>
+                        <div><label>Plate B Target Weight (tons)</label><input id="plateB_target" type="number"
+                                step="0.1"></div>
+                    </div>
+                    <h3 style="margin-top:12px">2) Pouring Control & Simulation</h3>
+                    <button id="openBtn" class="openBtn">OPEN</button>
+                    <button id="closeBtn" class="closeBtn">CLOSE</button>
+                    <button id="nextPlateBtn" class="nextplate">NEXT PLATE</button>
+                    <div class="metrics">
+                        <div class="metric">
+                            <div class="small">Flow rate (t/min)</div>
+                            <div id="metricFlow">0.00</div>
+                        </div>
+                        <div class="metric">
+                            <div class="small">Mass flow (kg/s)</div>
+                            <div id="metricMass">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="small">Current Plate / Progress</div>
+                            <div id="metricPlate">A / 0%</div>
+                        </div>
+                        <div class="metric">
+                            <div class="small">Remaining Ladle (tons)</div>
+                            <div id="metricRem">0.0</div>
+                        </div>
+                    </div>
+                    <div class="progress-wrap">
+                        <div class="small">Plate Fill Progress</div>
+                        <div class="progress" id="progressBar"></div>
+                    </div>
+                    <div style="margin-top:8px;" id="headBox">
+                        <div class="small">Computed Ladle Height (m)</div>
+                        <div id="heightVals">Pressure head (h) = 0.000 m</div>
+                    </div>
+                    <canvas id="flowChart"></canvas>
                 </div>
 
                 <div class="card">
@@ -390,49 +475,499 @@
     </div>
 
     <script>
-        // ===============================
-        // All your existing JS code here
-        // ===============================
+        const $ = id => document.getElementById(id);
+        const R = 1.085,
+            r = 1.015;
+        const nozzlePresetsA = [2.31, 2.17, 2.04, 1.91, 1.78, 1.61, 1.44, 1.27, 1.10, 0.98, 0.86, 0.74, 0.62, 0.54, 0.46, 0.38, 0.31, 0.25, 0.20, 0.14, 0.09];
+        const nozzlePresetsB = [2.31, 2.17, 2.04, 1.91, 1.78, 1.61, 1.44, 1.27, 1.10, 0.98, 0.86, 0.74, 0.62, 0.54, 0.46, 0.38, 0.31, 0.25, 0.20, 0.14, 0.09];
 
-        // --- CSV Export Fix ---
-        document.getElementById("exportCSV").addEventListener("click", function () {
+        let flowChart;
 
-            let table = document.getElementById("logTable").getElementsByTagName("tbody")[0];
-            let rows = table.querySelectorAll("tr");
+        let state = {
+            plate: 'A',
+            plateIndex: 0,
+            plateCum: 0,
+            totalCum: 0,
+            ladleRemain: 0,
+            nozzleIndex: 5,
+            elapsedSec: 0,
+            plateLog: [],
+            running: false
+        };
+        let timer = null;
 
-            if (rows.length === 0) {
-                alert("No data to export!");
+        // Dark mode state
+        let isDarkMode = false;
+
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark-mode', isDarkMode);
+            const themeBtn = $('themeToggleBtn');
+            if (isDarkMode) {
+                themeBtn.textContent = '☀️ LIGHT MODE';
+                themeBtn.style.background = '#ffb74d';
+            } else {
+                themeBtn.textContent = '🌙 DARK MODE';
+                themeBtn.style.background = '#424242';
+            }
+            // Save preference to localStorage
+            localStorage.setItem('darkMode', isDarkMode);
+            
+            // Also update chart colors when toggling mode
+            if (flowChart) {
+                updateChartColors();
+            }
+        }
+
+        function updateChartColors() {
+            if (!flowChart) return;
+            
+            const gridColor = isDarkMode ? '#444' : '#f0f0f0';
+            const textColor = isDarkMode ? '#fff' : '#111';
+            
+            flowChart.options.scales.x.grid.color = gridColor;
+            flowChart.options.scales.x.ticks.color = textColor;
+            flowChart.options.scales.y.grid.color = gridColor;
+            flowChart.options.scales.y.ticks.color = textColor;
+            flowChart.options.plugins.legend.labels.color = textColor;
+            
+            flowChart.update();
+        }
+
+        function initializeChart() {
+            if (flowChart) flowChart.destroy();
+            const ctx = $('flowChart').getContext('2d');
+            flowChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Flow (t/min)',
+                        data: [],
+                        borderColor: '#1565c0',
+                        fill: true,
+                        tension: 0.15
+                    }]
+                },
+                options: {
+                    animation: false,
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time (s)',
+                                color: isDarkMode ? '#fff' : '#111'
+                            },
+                            grid: {
+                                color: isDarkMode ? '#444' : '#f0f0f0'
+                            },
+                            ticks: {
+                                color: isDarkMode ? '#fff' : '#111'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Flow (t/min)',
+                                color: isDarkMode ? '#fff' : '#111'
+                            },
+                            beginAtZero: true,
+                            max: 2.8,
+                            grid: {
+                                color: isDarkMode ? '#444' : '#f0f0f0'
+                            },
+                            ticks: {
+                                color: isDarkMode ? '#fff' : '#111'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: isDarkMode ? '#fff' : '#111'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function getCurrentPreset() {
+            return state.plate === 'A' ? nozzlePresetsA : nozzlePresetsB;
+        }
+
+        function computeHeadFromMass(tons, density) {
+            const m = tons * 1000,
+                V = m / density;
+            const h = (3 * V) / (Math.PI * (R * R + r * r + R * r));
+            return h;
+        }
+
+        function getInterpolatedFlow(nozzleIndex, gatePercent) {
+            const nozzlePresets = getCurrentPreset();
+            const lower = nozzlePresets[nozzleIndex];
+            const upper = nozzlePresets[Math.max(nozzleIndex - 1, 0)];
+            return lower + (upper - lower) * (gatePercent / 100);
+        }
+
+        function applyPressureCorrection(flow, h, hMax) {
+            if (h <= 0 || hMax <= 0) return 0;
+            return flow * Math.sqrt(h / hMax);
+        }
+
+        function displayMetrics(flow) {
+            $('metricFlow').innerText = flow.toFixed(2);
+            $('metricMass').innerText = (flow * 1000 / 60).toFixed(1);
+        }
+
+        function updateSummary() {
+            $('totalPoured').innerText = state.totalCum.toFixed(3);
+            $('ladleRem').innerText = state.ladleRemain.toFixed(3);
+        }
+
+        function pushLog(row) {
+            state.plateLog.push(row);
+            document.querySelector('#logTable tbody').insertAdjacentHTML('beforeend',
+                `<tr><td>${row.plate}</td><td>${row.target}</td><td>${row.actual}</td><td>${row.time}</td><td>${row.remarks}</td></tr>`);
+        }
+
+        function readInputs() {
+            return {
+                ladleWeight: parseFloat($('ladleWeight').value) || 0,
+                density: parseFloat($('density').value) || 7040,
+                plateTargets: [parseFloat($('plateA_target').value) || 0, parseFloat($('plateB_target').value) || 0]
+            };
+        }
+
+        function startPouring() {
+            if (state.running) return;
+            const cfg = readInputs();
+            if (state.elapsedSec === 0) {
+                state.ladleRemain = cfg.ladleWeight;
+                state.totalCum = 0;
+            }
+            if (cfg.ladleWeight <= 0) {
+                alert('Please enter a positive Ladle weight to start pouring.');
+                return;
+            }
+            state.running = true;
+            timer = setInterval(() => {
+                const h = computeHeadFromMass(state.ladleRemain, cfg.density);
+                const hMax = computeHeadFromMass(cfg.ladleWeight, cfg.density);
+                const baseFlow = getInterpolatedFlow(state.nozzleIndex, 100);
+                const flow = applyPressureCorrection(baseFlow, h, hMax);
+                const tonPerSec = flow / 60;
+
+                if (state.ladleRemain <= 0.001 || flow <= 0.001) {
+                    stopPouring();
+                    alert('Ladle Empty or Flow Stopped!');
+                    return;
+                }
+
+                state.plateCum += tonPerSec;
+                state.totalCum += tonPerSec;
+                state.ladleRemain = Math.max(0, state.ladleRemain - tonPerSec);
+                state.elapsedSec++;
+
+                if (flowChart.data.labels.length > 300) {
+                    flowChart.data.labels.shift();
+                    flowChart.data.datasets[0].data.shift();
+                }
+
+                flowChart.data.labels.push(state.elapsedSec);
+                flowChart.data.datasets[0].data.push(flow);
+                flowChart.update('none');
+                displayMetrics(flow);
+
+                const cfgTargets = cfg.plateTargets[state.plateIndex];
+                const pct = cfgTargets > 0 ? Math.min(state.plateCum / cfgTargets * 100, 100) : 0;
+                $('metricPlate').innerText = `${state.plate} / ${pct.toFixed(0)}%`;
+                $('metricRem').innerText = state.ladleRemain.toFixed(3);
+                $('progressBar').style.width = pct + '%';
+                $('heightVals').innerText = `Pressure head (h) = ${h.toFixed(3)} m | Corrected Flow = ${flow.toFixed(2)} t/min`;
+                updateSummary();
+            }, 1000);
+        }
+
+        function stopPouring() {
+            if (timer) clearInterval(timer);
+            state.running = false;
+        }
+
+        function openGate() {
+            if (!state.running) {
+                startPouring();
+                return;
+            }
+            if (state.nozzleIndex > 0) state.nozzleIndex--;
+            if (!state.running) {
+                const cfg = readInputs();
+                const h = computeHeadFromMass(state.ladleRemain, cfg.density);
+                const hMax = computeHeadFromMass(cfg.ladleWeight, cfg.density);
+                const baseFlow = getInterpolatedFlow(state.nozzleIndex, 100);
+                const flow = applyPressureCorrection(baseFlow, h, hMax);
+                displayMetrics(flow);
+            }
+        }
+
+        function closeGate() {
+            if (state.nozzleIndex < getCurrentPreset().length - 1) state.nozzleIndex++;
+            else stopPouring();
+
+            if (!state.running) {
+                const cfg = readInputs();
+                const h = computeHeadFromMass(state.ladleRemain, cfg.density);
+                const hMax = computeHeadFromMass(cfg.ladleWeight, cfg.density);
+                const baseFlow = getInterpolatedFlow(state.nozzleIndex, 100);
+                const flow = applyPressureCorrection(baseFlow, h, hMax);
+                displayMetrics(flow);
+            }
+        }
+
+        function nextPlate() {
+            stopPouring();
+            const cfg = readInputs();
+
+            pushLog({
+                plate: state.plate,
+                target: cfg.plateTargets[state.plateIndex].toFixed(2),
+                actual: state.plateCum.toFixed(2),
+                time: (state.elapsedSec / 60).toFixed(2),
+                remarks: 'Completed'
+            });
+
+            if (state.plateIndex < 1) {
+                state.plateIndex++;
+                state.plate = 'B';
+                state.plateCum = 0;
+                state.nozzleIndex = 5;
+                $('metricPlate').innerText = 'B / 0%';
+                $('progressBar').style.width = '0%';
+                alert('✅ Switched to Plate B. New flow rate presets activated.');
+                startPouring();
+            } else {
+                alert('✅ Both Plates Completed! Use the COMPLETE button for final log.');
+            }
+        }
+
+            function exportCSV() {
+            // Build CSV
+            let csv = 'Flow (t/min),Time (s)\n';
+            if (flowChart && flowChart.data && flowChart.data.datasets[0]) {
+                flowChart.data.datasets[0].data.forEach((v, i) => {
+                    csv += `${v},${flowChart.data.labels[i]}\n`;
+                });
+            } else {
+                alert('No chart data available to export!');
+                return;
+            }
+            
+            // APK-friendly method: Create file and prompt user to save
+            const filename = 'flow_data_' + new Date().toISOString().slice(0,10) + '.csv';
+            
+            // Method 1: Try standard download
+            try {
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                
+                // Trigger download
+                document.body.appendChild(a);
+                a.click();
+                
+                // Clean up
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                // Show success message
+                setTimeout(() => {
+                    alert('CSV file downloaded as: ' + filename + '\n\nCheck your device\'s Downloads folder.');
+                }, 500);
+                
+            } catch (error) {
+                // Method 2: Fallback - show data and let user copy
+                console.log('Standard download failed, using fallback:', error);
+                
+                const userChoice = confirm(
+                    'CSV Export Ready!\n\n' +
+                    'OK: Copy to clipboard\n' +
+                    'Cancel: View data to copy manually'
+                );
+                
+                if (userChoice) {
+                    // Try to copy to clipboard
+                    navigator.clipboard.writeText(csv).then(() => {
+                        alert('CSV data copied to clipboard!\n\nYou can now paste it into:\n• Excel\n• Google Sheets\n• Notepad\n\nFilename: ' + filename);
+                    }).catch(() => {
+                        // Clipboard failed, show prompt
+                        prompt('Copy this CSV data (paste into Excel/Sheets):', csv);
+                    });
+                } else {
+                    // Show in new window
+                    const win = window.open();
+                    win.document.write(
+                        '<html><head><title>' + filename + '</title>' +
+                        '<style>body { font-family: monospace; white-space: pre; padding: 20px; }</style>' +
+                        '</head><body>' + csv + '</body></html>'
+                    );
+                    win.document.close();
+                }
+            }
+        }
+
+        function resetAll() {
+            stopPouring();
+            state = {
+                plate: 'A',
+                plateIndex: 0,
+                plateCum: 0,
+                totalCum: 0,
+                ladleRemain: 0,
+                nozzleIndex: 5,
+                elapsedSec: 0,
+                plateLog: [],
+                running: false
+            };
+            document.querySelector('#logTable tbody').innerHTML = '';
+            $('metricFlow').innerText = '0.00';
+            $('metricMass').innerText = '0';
+            $('metricPlate').innerText = 'A / 0%';
+            $('metricRem').innerText = '0.0';
+            $('progressBar').style.width = '0%';
+            $('totalPoured').innerText = '0.00';
+            $('ladleRem').innerText = '0.00';
+            $('heightVals').innerText = 'Pressure head (h) = 0.000 m';
+            if (flowChart) {
+                flowChart.data.labels = [];
+                flowChart.data.datasets[0].data = [];
+                flowChart.update();
+            }
+        }
+        
+        function logOut() {
+            if (state.running) {
+                const confirmLogOut = confirm("Casting is currently running. Logging out will reset the current heat data. Are you sure you want to log out?");
+                if (!confirmLogOut) {
+                    return;
+                }
+            }
+            // 1. Reset all current heat data
+            resetAll();
+            
+            // 2. Hide app and show login screen
+            $('app-content').style.display = 'none';
+            $('login-screen').style.display = 'block';
+
+            // 3. Clear inputs for next login
+            $('employeeId').value = '';
+            $('password').value = '';
+            $('loginMessage').innerText = '';
+        }
+
+        function completeProcess() {
+            stopPouring();
+            const heatNo = $('heatNo').value || 'N/A';
+            const date = new Date().toISOString();
+            const record = {
+                heat: heatNo,
+                date: date,
+                total: state.totalCum.toFixed(2)
+            };
+            const history = JSON.parse(localStorage.getItem('heatHistory') || '[]');
+            history.push(record);
+            localStorage.setItem('heatHistory', JSON.stringify(history));
+            alert('✅ Casting Completed & Saved to History!');
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const hist = JSON.parse(localStorage.getItem('heatHistory') || '[]');
+            const filter = $('filterSelect').value;
+            const now = new Date();
+            const filtered = hist.filter(h => {
+                const d = new Date(h.date);
+                if (filter === 'week') return (now - d) / (1000 * 60 * 60 * 24) <= 7;
+                if (filter === 'month') return (now - d) / (1000 * 60 * 60 * 24) <= 30;
+                return true;
+            });
+            $('historyList').innerHTML = filtered.length ? filtered.map(h => `Heat ${h.heat} | ${h.total} t | ${new Date(h.date).toLocaleDateString()}`).join('<br>') : 'No history available.';
+        }
+
+        /* --- Login System Functions --- */
+
+        function attemptLogin() {
+            const employeeId = $('employeeId').value;
+            const password = $('password').value;
+            const idNum = parseInt(employeeId);
+            const msg = $('loginMessage');
+
+            msg.innerText = '';
+
+            if (employeeId.length !== 4 || isNaN(idNum)) {
+                msg.innerText = 'Employee ID must be exactly 4 digits (1999 - 4999).';
                 return;
             }
 
-            let csv = "Plate,Target (t),Actual (t),Time (min),Remarks\n";
+            if (idNum < 1999 || idNum > 4999) {
+                msg.innerText = 'Employee ID must be between 1999 and 4999.';
+                return;
+            }
 
-            rows.forEach(row => {
-                let cols = row.querySelectorAll("td");
-                let line = [];
-                cols.forEach(col => {
-                    line.push(col.innerText);
-                });
-                csv += line.join(",") + "\n";
+            if (employeeId !== password) {
+                msg.innerText = 'Password does not match Employee ID.';
+                return;
+            }
+
+            // Successful Login
+            $('login-screen').style.display = 'none';
+            $('app-content').style.display = 'block';
+            
+            // Load dark mode preference
+            const savedDarkMode = localStorage.getItem('darkMode') === 'true';
+            if (savedDarkMode) {
+                isDarkMode = true;
+                document.body.classList.add('dark-mode');
+                $('themeToggleBtn').textContent = '☀️ LIGHT MODE';
+                $('themeToggleBtn').style.background = '#ffb74d';
+            }
+            
+            initializeChart();
+            renderHistory();
+        }
+
+
+        // --- Event Listeners and Initial Setup ---
+        window.onload = () => {
+            $('loginBtn').addEventListener('click', attemptLogin);
+            $('employeeId').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') attemptLogin();
             });
+            $('password').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') attemptLogin();
+            });
+            
+            // New Theme Toggle listener
+            $('themeToggleBtn').addEventListener('click', toggleDarkMode);
+            
+            // New Log Out listener
+            $('logoutBtn').addEventListener('click', logOut);
 
-            let blob = new Blob([csv], { type: "text/csv" });
-            let url = URL.createObjectURL(blob);
+            $('filterSelect').addEventListener('change', renderHistory);
+            $('openBtn').addEventListener('click', openGate);
+            $('closeBtn').addEventListener('click', closeGate);
+            $('nextPlateBtn').addEventListener('click', nextPlate);
+            $('exportCSV').addEventListener('click', exportCSV);
+            $('resetBtn').addEventListener('click', resetAll);
+            $('completeBtn').addEventListener('click', completeProcess);
 
-            let a = document.createElement("a");
-            a.href = url;
-            a.download = "flowrate_log.csv";
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-
-            // Android WebView fix
-            window.location.href = url;
-        });
-
-        // ===============================
-        // All other JS (flow chart, login, pouring, dark mode) stays untouched
-        // ===============================
+            displayMetrics(0.00);
+            updateSummary();
+        };
     </script>
 </body>
 
