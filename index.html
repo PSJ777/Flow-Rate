@@ -112,11 +112,6 @@
             margin-top: 10px;
         }
 
-        .themeToggleBtn {
-            background: #424242;
-            margin-top: 0;
-            width: 120px;
-        }
 
         .metrics {
             display: flex;
@@ -246,103 +241,6 @@
         #employeeId[type=number] {
             -moz-appearance: textfield;
         }
-
-        /* Dark mode styles */
-        body.dark-mode {
-            --bg: #121212;
-            --card: #1e1e1e;
-            --accent: #64b5f6;
-            --ok: #4caf50;
-            --warn: #ffb74d;
-            --danger: #ef5350;
-            --muted: #b0b0b0;
-            color: #ffffff;
-        }
-
-        body.dark-mode .card {
-            background: var(--card);
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
-        }
-
-        body.dark-mode input {
-            background: #2d2d2d;
-            color: #ffffff;
-            border: 1px solid #444;
-        }
-
-        body.dark-mode select {
-            background: #2d2d2d;
-            color: #ffffff;
-            border: 1px solid #444;
-        }
-
-        body.dark-mode .metric {
-            background: #2d2d2d;
-        }
-
-        body.dark-mode .metric div:not(.small) {
-            color: #ffffff !important;
-        }
-
-        body.dark-mode .progress-wrap {
-            background: #2d2d2d;
-        }
-
-        body.dark-mode table {
-            color: #ffffff;
-        }
-
-        body.dark-mode th,
-        body.dark-mode td {
-            border-bottom: 1px solid #444;
-        }
-
-        body.dark-mode canvas {
-            background: #2d2d2d;
-        }
-
-        body.dark-mode .historyBox {
-            border-top: 1px solid #444;
-        }
-
-        body.dark-mode .login-box {
-            background: #1e1e1e;
-            color: #ffffff;
-        }
-
-        body.dark-mode .login-box input {
-            background: #2d2d2d;
-            color: #ffffff;
-            border: 1px solid #444;
-        }
-
-        /* FIX: Ensure numbers in summary boxes are visible in dark mode */
-        body.dark-mode #totalPoured,
-        body.dark-mode #ladleRem,
-        body.dark-mode #metricFlow,
-        body.dark-mode #metricMass,
-        body.dark-mode #metricPlate,
-        body.dark-mode #metricRem {
-            color: #ffffff !important;
-        }
-
-        /* FIX: Style for summary boxes */
-        body.dark-mode div[style*="background:#f8fbff"],
-        body.dark-mode div[style*="background:#fff8f0"] {
-            background: #2d2d2d !important;
-        }
-
-        body.dark-mode div[style*="background:#f8fbff"] div:not(.small),
-        body.dark-mode div[style*="background:#fff8f0"] div:not(.small) {
-            color: #ffffff !important;
-            font-weight: 600;
-        }
-
-        .header-buttons {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
     </style>
 </head>
 
@@ -369,20 +267,17 @@
 
         <div id="app-content">
 
-           
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h1>Flow Rate Monitoring App</h1>
-                <div class="header-buttons">
-                    <button id="themeToggleBtn" class="themeToggleBtn">🌙 DARK MODE</button>
-                    <button id="logoutBtn" class="logoutBtn" style="width: 120px; margin-top: 0;">LOG OUT</button>
-                </div>
+                <button id="logoutBtn" class="logoutBtn" style="width: 120px; margin-top: 0;">LOG OUT</button>
             </div>
             
             <div class="grid">
                 <div class="card">
                     <h3>1) Pre-casting Setup</h3>
                     <label>Heat No.</label><input id="heatNo" type="text">
+                    <label>Grade</label><input id="grade" type="text" placeholder="Grade (e.g., E450)">
                     <label>Ladle ID</label><input id="ladleId" type="text">
                     <div class="row">
                         <div><label>LM for cast (tons)</label><input id="ladleWeight" type="number" step="0.1"></div>
@@ -447,11 +342,11 @@
                     <div style="display:flex;gap:8px;margin-top:8px;">
                         <div style="flex:1;background:#f8fbff;padding:10px;border-radius:8px;">
                             <div class="small">Total Poured (tons)</div>
-                            <div id="totalPoured" style="font-weight:600;color:#111;">0.00</div>
+                            <div id="totalPoured">0.00</div>
                         </div>
                         <div style="flex:1;background:#fff8f0;padding:10px;border-radius:8px;">
                             <div class="small">Ladle Remaining (tons)</div>
-                            <div id="ladleRem" style="font-weight:600;color:#111;">0.00</div>
+                            <div id="ladleRem">0.00</div>
                         </div>
                     </div>
                     <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
@@ -483,56 +378,41 @@
 
         let flowChart;
 
+        // index target for opening flow (closest to 0.98)
+        function findClosestIndexForValue(arr, target) {
+            let bestIdx = 0;
+            let bestDiff = Math.abs(arr[0] - target);
+            for (let i = 1; i < arr.length; i++) {
+                const diff = Math.abs(arr[i] - target);
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    bestIdx = i;
+                }
+            }
+            return bestIdx;
+        }
+        const OPEN_FLOW_TARGET = 0.98;
+
         let state = {
             plate: 'A',
             plateIndex: 0,
             plateCum: 0,
             totalCum: 0,
             ladleRemain: 0,
-            nozzleIndex: 5,
+            nozzleIndex: 5, // initial will be re-set to opening flow at start
             elapsedSec: 0,
             plateLog: [],
-            running: false
+            running: false,
+            // timing/metadata
+            heatStartISO: null,
+            heatEndISO: null,
+            currentPlateStartSec: null,
+            plateTimesSec: {
+                A: 0,
+                B: 0
+            }
         };
         let timer = null;
-
-        // Dark mode state
-        let isDarkMode = false;
-
-        function toggleDarkMode() {
-            isDarkMode = !isDarkMode;
-            document.body.classList.toggle('dark-mode', isDarkMode);
-            const themeBtn = $('themeToggleBtn');
-            if (isDarkMode) {
-                themeBtn.textContent = '☀️ LIGHT MODE';
-                themeBtn.style.background = '#ffb74d';
-            } else {
-                themeBtn.textContent = '🌙 DARK MODE';
-                themeBtn.style.background = '#424242';
-            }
-            // Save preference to localStorage
-            localStorage.setItem('darkMode', isDarkMode);
-            
-            // Also update chart colors when toggling mode
-            if (flowChart) {
-                updateChartColors();
-            }
-        }
-
-        function updateChartColors() {
-            if (!flowChart) return;
-            
-            const gridColor = isDarkMode ? '#444' : '#f0f0f0';
-            const textColor = isDarkMode ? '#fff' : '#111';
-            
-            flowChart.options.scales.x.grid.color = gridColor;
-            flowChart.options.scales.x.ticks.color = textColor;
-            flowChart.options.scales.y.grid.color = gridColor;
-            flowChart.options.scales.y.ticks.color = textColor;
-            flowChart.options.plugins.legend.labels.color = textColor;
-            
-            flowChart.update();
-        }
 
         function initializeChart() {
             if (flowChart) flowChart.destroy();
@@ -556,37 +436,16 @@
                         x: {
                             title: {
                                 display: true,
-                                text: 'Time (s)',
-                                color: isDarkMode ? '#fff' : '#111'
-                            },
-                            grid: {
-                                color: isDarkMode ? '#444' : '#f0f0f0'
-                            },
-                            ticks: {
-                                color: isDarkMode ? '#fff' : '#111'
+                                text: 'Time (s)'
                             }
                         },
                         y: {
                             title: {
                                 display: true,
-                                text: 'Flow (t/min)',
-                                color: isDarkMode ? '#fff' : '#111'
+                                text: 'Flow (t/min)'
                             },
                             beginAtZero: true,
-                            max: 2.8,
-                            grid: {
-                                color: isDarkMode ? '#444' : '#f0f0f0'
-                            },
-                            ticks: {
-                                color: isDarkMode ? '#fff' : '#111'
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            labels: {
-                                color: isDarkMode ? '#fff' : '#111'
-                            }
+                            max: 2.8
                         }
                     }
                 }
@@ -627,17 +486,28 @@
         }
 
         function pushLog(row) {
+            // row: {plate, target, actual, timeMin, remarks}
             state.plateLog.push(row);
             document.querySelector('#logTable tbody').insertAdjacentHTML('beforeend',
-                `<tr><td>${row.plate}</td><td>${row.target}</td><td>${row.actual}</td><td>${row.time}</td><td>${row.remarks}</td></tr>`);
+                `<tr><td>${row.plate}</td><td>${row.target}</td><td>${row.actual}</td><td>${row.timeMin}</td><td>${row.remarks}</td></tr>`);
         }
 
         function readInputs() {
             return {
                 ladleWeight: parseFloat($('ladleWeight').value) || 0,
                 density: parseFloat($('density').value) || 7040,
-                plateTargets: [parseFloat($('plateA_target').value) || 0, parseFloat($('plateB_target').value) || 0]
+                plateTargets: [parseFloat($('plateA_target').value) || 0, parseFloat($('plateB_target').value) || 0],
+                heatNo: $('heatNo').value || '',
+                grade: $('grade').value || '',
+                ladleId: $('ladleId').value || ''
             };
+        }
+
+        function setOpeningNozzleIndex() {
+            // set nozzleIndex to the index in current preset closest to OPEN_FLOW_TARGET
+            const presets = getCurrentPreset();
+            const idx = findClosestIndexForValue(presets, OPEN_FLOW_TARGET);
+            state.nozzleIndex = idx;
         }
 
         function startPouring() {
@@ -651,6 +521,18 @@
                 alert('Please enter a positive Ladle weight to start pouring.');
                 return;
             }
+
+            // ensure opening flow is at ~0.98 t/min when starting
+            setOpeningNozzleIndex();
+
+            // if heat hasn't started yet, set start timestamp
+            if (!state.heatStartISO) state.heatStartISO = new Date().toISOString();
+
+            // if this is the start of current plate, mark its start second
+            if (state.currentPlateStartSec === null) {
+                state.currentPlateStartSec = state.elapsedSec;
+            }
+
             state.running = true;
             timer = setInterval(() => {
                 const h = computeHeadFromMass(state.ladleRemain, cfg.density);
@@ -697,9 +579,11 @@
 
         function openGate() {
             if (!state.running) {
+                // start pouring (startPouring will ensure opening flow is set)
                 startPouring();
                 return;
             }
+            // if running the operator wants to open more (increase flow)
             if (state.nozzleIndex > 0) state.nozzleIndex--;
             if (!state.running) {
                 const cfg = readInputs();
@@ -726,98 +610,97 @@
         }
 
         function nextPlate() {
+            // Stop pouring and log the completed plate
             stopPouring();
             const cfg = readInputs();
+
+            // compute plate time for the plate just finished
+            const startSec = state.currentPlateStartSec !== null ? state.currentPlateStartSec : 0;
+            const plateTimeSec = state.elapsedSec - startSec;
+            // save plate time
+            state.plateTimesSec[state.plate] = plateTimeSec;
 
             pushLog({
                 plate: state.plate,
                 target: cfg.plateTargets[state.plateIndex].toFixed(2),
                 actual: state.plateCum.toFixed(2),
-                time: (state.elapsedSec / 60).toFixed(2),
+                timeMin: (plateTimeSec / 60).toFixed(2),
                 remarks: 'Completed'
             });
 
+            // reset current plate cum and increment plate index
             if (state.plateIndex < 1) {
                 state.plateIndex++;
                 state.plate = 'B';
                 state.plateCum = 0;
-                state.nozzleIndex = 5;
+                // set nozzle index to opening flow for the new plate
+                setOpeningNozzleIndex();
+                // reset plate start sec to current elapsedSec so timing for new plate begins now
+                state.currentPlateStartSec = state.elapsedSec;
                 $('metricPlate').innerText = 'B / 0%';
                 $('progressBar').style.width = '0%';
-                alert('✅ Switched to Plate B. New flow rate presets activated.');
+                alert('✅ Switched to Plate B. Opening flow set to ~0.98 t/min.');
+                // start pouring automatically with opening flow set
                 startPouring();
             } else {
+                // both plates completed
+                // compute any final plate time (though we already stored)
+                state.currentPlateStartSec = null;
                 alert('✅ Both Plates Completed! Use the COMPLETE button for final log.');
             }
         }
 
-            function exportCSV() {
-            // Build CSV
-            let csv = 'Flow (t/min),Time (s)\n';
-            if (flowChart && flowChart.data && flowChart.data.datasets[0]) {
-                flowChart.data.datasets[0].data.forEach((v, i) => {
-                    csv += `${v},${flowChart.data.labels[i]}\n`;
-                });
-            } else {
-                alert('No chart data available to export!');
-                return;
+        function exportCSV() {
+            const cfg = readInputs();
+
+            // Ensure heatEndISO is set to current if heat started
+            if (state.heatStartISO && !state.heatEndISO) state.heatEndISO = new Date().toISOString();
+
+            const startISO = state.heatStartISO || 'N/A';
+            const endISO = state.heatEndISO || (state.heatStartISO ? new Date().toISOString() : 'N/A');
+            let totalProcessMin = 'N/A';
+            if (state.heatStartISO && state.heatEndISO) {
+                totalProcessMin = ((new Date(state.heatEndISO) - new Date(state.heatStartISO)) / 60000).toFixed(2);
+            } else if (state.heatStartISO && !state.heatEndISO) {
+                totalProcessMin = ((new Date(endISO) - new Date(state.heatStartISO)) / 60000).toFixed(2);
             }
-            
-            // APK-friendly method: Create file and prompt user to save
-            const filename = 'flow_data_' + new Date().toISOString().slice(0,10) + '.csv';
-            
-            // Method 1: Try standard download
-            try {
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                
-                // Trigger download
-                document.body.appendChild(a);
-                a.click();
-                
-                // Clean up
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, 100);
-                
-                // Show success message
-                setTimeout(() => {
-                    alert('CSV file downloaded as: ' + filename + '\n\nCheck your device\'s Downloads folder.');
-                }, 500);
-                
-            } catch (error) {
-                // Method 2: Fallback - show data and let user copy
-                console.log('Standard download failed, using fallback:', error);
-                
-                const userChoice = confirm(
-                    'CSV Export Ready!\n\n' +
-                    'OK: Copy to clipboard\n' +
-                    'Cancel: View data to copy manually'
-                );
-                
-                if (userChoice) {
-                    // Try to copy to clipboard
-                    navigator.clipboard.writeText(csv).then(() => {
-                        alert('CSV data copied to clipboard!\n\nYou can now paste it into:\n• Excel\n• Google Sheets\n• Notepad\n\nFilename: ' + filename);
-                    }).catch(() => {
-                        // Clipboard failed, show prompt
-                        prompt('Copy this CSV data (paste into Excel/Sheets):', csv);
-                    });
-                } else {
-                    // Show in new window
-                    const win = window.open();
-                    win.document.write(
-                        '<html><head><title>' + filename + '</title>' +
-                        '<style>body { font-family: monospace; white-space: pre; padding: 20px; }</style>' +
-                        '</head><body>' + csv + '</body></html>'
-                    );
-                    win.document.close();
-                }
-            }
+
+            // Plate times in minutes (if recorded)
+            const plateAmin = state.plateTimesSec.A ? (state.plateTimesSec.A / 60).toFixed(2) : (state.plateLog.find(p => p.plate === 'A') ? state.plateLog.find(p => p.plate === 'A').timeMin : '0.00');
+            const plateBmin = state.plateTimesSec.B ? (state.plateTimesSec.B / 60).toFixed(2) : (state.plateLog.find(p => p.plate === 'B') ? state.plateLog.find(p => p.plate === 'B').timeMin : '0.00');
+
+            let csv = '';
+            // metadata header
+            csv += `Heat No:,${cfg.heatNo}\n`;
+            csv += `Grade:,${cfg.grade}\n`;
+            csv += `Ladle ID:,${cfg.ladleId}\n`;
+            csv += `Heat Start (ISO),${startISO}\n`;
+            csv += `Heat End (ISO),${endISO}\n`;
+            csv += `Total Process Time (min),${totalProcessMin}\n`;
+            csv += `Plate A Time (min),${plateAmin}\n`;
+            csv += `Plate B Time (min),${plateBmin}\n`;
+            csv += `\n`;
+
+            // plate summary table
+            csv += `Plate,Target (t),Actual (t),Time (min),Remarks\n`;
+            state.plateLog.forEach(p => {
+                csv += `${p.plate},${p.target},${p.actual},${p.timeMin},${p.remarks}\n`;
+            });
+            csv += `\n`;
+
+            // flow series
+            csv += 'Flow (t/min),Time (s)\n';
+            flowChart.data.datasets[0].data.forEach((v, i) => {
+                csv += `${v},${flowChart.data.labels[i]}\n`;
+            });
+
+            const blob = new Blob([csv], {
+                type: 'text/csv'
+            });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `flow_log_${cfg.heatNo || 'heat'}.csv`;
+            a.click();
         }
 
         function resetAll() {
@@ -831,7 +714,11 @@
                 nozzleIndex: 5,
                 elapsedSec: 0,
                 plateLog: [],
-                running: false
+                running: false,
+                heatStartISO: null,
+                heatEndISO: null,
+                currentPlateStartSec: null,
+                plateTimesSec: { A: 0, B: 0 }
             };
             document.querySelector('#logTable tbody').innerHTML = '';
             $('metricFlow').innerText = '0.00';
@@ -872,10 +759,28 @@
         function completeProcess() {
             stopPouring();
             const heatNo = $('heatNo').value || 'N/A';
-            const date = new Date().toISOString();
+            // set heat end timestamp
+            state.heatEndISO = new Date().toISOString();
+
+            // If current plate is still in progress and wasn't logged, log it
+            if (state.currentPlateStartSec !== null && state.plateCum > 0) {
+                const plate = state.plate;
+                const plateTimeSec = state.elapsedSec - state.currentPlateStartSec;
+                state.plateTimesSec[plate] = plateTimeSec;
+
+                pushLog({
+                    plate: plate,
+                    target: (parseFloat($('plateA_target').value) || 0).toFixed(2),
+                    actual: state.plateCum.toFixed(2),
+                    timeMin: (plateTimeSec / 60).toFixed(2),
+                    remarks: 'Completed (on complete)'
+                });
+                state.currentPlateStartSec = null;
+            }
+
             const record = {
                 heat: heatNo,
-                date: date,
+                date: state.heatEndISO,
                 total: state.totalCum.toFixed(2)
             };
             const history = JSON.parse(localStorage.getItem('heatHistory') || '[]');
@@ -926,16 +831,6 @@
             // Successful Login
             $('login-screen').style.display = 'none';
             $('app-content').style.display = 'block';
-            
-            // Load dark mode preference
-            const savedDarkMode = localStorage.getItem('darkMode') === 'true';
-            if (savedDarkMode) {
-                isDarkMode = true;
-                document.body.classList.add('dark-mode');
-                $('themeToggleBtn').textContent = '☀️ LIGHT MODE';
-                $('themeToggleBtn').style.background = '#ffb74d';
-            }
-            
             initializeChart();
             renderHistory();
         }
@@ -950,9 +845,6 @@
             $('password').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') attemptLogin();
             });
-            
-            // New Theme Toggle listener
-            $('themeToggleBtn').addEventListener('click', toggleDarkMode);
             
             // New Log Out listener
             $('logoutBtn').addEventListener('click', logOut);
@@ -972,4 +864,3 @@
 </body>
 
 </html>
-
