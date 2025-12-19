@@ -250,7 +250,7 @@
         <div id="login-screen">
             <div class="login-box">
                 <div class="login-image">
-                    <img src="./saarloha_logo.jpeg" alt="SAARLOHA Logo">
+                    <img src="image_6b14e0.png" alt="SAARLOHA Logo">
                 </div>
                 <h2>System Login</h2>
                 <label for="employeeId">Employee ID</label>
@@ -266,10 +266,8 @@
 
 
         <div id="app-content">
-
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h1>Flow Rate Monitoring App</h1>
                 <button id="logoutBtn" class="logoutBtn" style="width: 120px; margin-top: 0;">LOG OUT</button>
             </div>
             
@@ -552,7 +550,7 @@
                 state.ladleRemain = Math.max(0, state.ladleRemain - tonPerSec);
                 state.elapsedSec++;
 
-                if (flowChart.data.labels.length > 300) {
+                if (flowChart.data.labels.length > 3000) {
                     flowChart.data.labels.shift();
                     flowChart.data.datasets[0].data.shift();
                 }
