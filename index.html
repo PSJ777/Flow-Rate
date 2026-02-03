@@ -5,7 +5,7 @@
     <title>Flow Rate Monitoring App</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js">           </script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <style>
         :root {
             --bg: #f6f8fb;
@@ -106,12 +106,10 @@
             background: var(--ok);
         }
 
-        /* New button style for Log Out */
         .logoutBtn {
-            background: #616161; /* Darker gray for contrast */
-            margin-top: 10px;
+            background: #616161;
+            margin-top: 0;
         }
-
 
         .metrics {
             display: flex;
@@ -186,10 +184,8 @@
             border: 1px solid #ccc;
         }
 
-        /* --- New/Modified Styles for Login and Image --- */
         #app-content {
             display: none;
-            /* Hide the app initially */
         }
 
         .login-box {
@@ -229,23 +225,24 @@
             border: 1px solid #ddd;
         }
 
-        /* --- CSS to remove up/down arrows from number input (Employee ID) --- */
-        /* For Chrome, Safari, Edge, Opera */
         #employeeId::-webkit-outer-spin-button,
         #employeeId::-webkit-inner-spin-button {
             -webkit-appearance: none;
             margin: 0;
         }
 
-        /* For Firefox */
         #employeeId[type=number] {
             -moz-appearance: textfield;
         }
+        
+        #exportCSV:active {
+            background: #1565c0;
+            transform: scale(0.98);
+        }
     </style>
-
+</head>
 <body>
     <div class="container">
-
         <div id="login-screen">
             <div class="login-box">
                 <div class="login-image">
@@ -263,10 +260,7 @@
             </div>
         </div>
 
-
         <div id="app-content">
-
-            
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h1>Flow Rate Monitoring App</h1>
                 <button id="logoutBtn" class="logoutBtn" style="width: 120px; margin-top: 0;">LOG OUT</button>
@@ -280,15 +274,12 @@
                     <label>Ladle ID</label><input id="ladleId" type="text">
                     <div class="row">
                         <div><label>LM for cast (tons)</label><input id="ladleWeight" type="number" step="0.1"></div>
-                        <div><label>Steel Density (kg/m3)</label><input id="density" type="number" step="1"
-                                value="7040"></div>
+                        <div><label>Steel Density (kg/m3)</label><input id="density" type="number" step="1" value="7040"></div>
                     </div>
                     <h4 style="margin-top:10px;">Plate Targets</h4>
                     <div class="row">
-                        <div><label>Plate A Target Weight (tons)</label><input id="plateA_target" type="number"
-                                step="0.1"></div>
-                        <div><label>Plate B Target Weight (tons)</label><input id="plateB_target" type="number"
-                                step="0.1"></div>
+                        <div><label>Plate A Target Weight (tons)</label><input id="plateA_target" type="number" step="0.1"></div>
+                        <div><label>Plate B Target Weight (tons)</label><input id="plateB_target" type="number" step="0.1"></div>
                     </div>
                     <h3 style="margin-top:12px">2) Pouring Control & Simulation</h3>
                     <button id="openBtn" class="openBtn">OPEN</button>
@@ -365,19 +356,16 @@
                 </div>
             </div>
         </div>
-
     </div>
 
     <script>
         const $ = id => document.getElementById(id);
-        const R = 1.085,
-            r = 1.015;
+        const R = 1.085, r = 1.015;
         const nozzlePresetsA = [2.31, 2.17, 2.04, 1.91, 1.78, 1.61, 1.44, 1.27, 1.10, 0.98, 0.86, 0.74, 0.62, 0.54, 0.46, 0.38, 0.31, 0.25, 0.20, 0.14, 0.09];
         const nozzlePresetsB = [2.31, 2.17, 2.04, 1.91, 1.78, 1.61, 1.44, 1.27, 1.10, 0.98, 0.86, 0.74, 0.62, 0.54, 0.46, 0.38, 0.31, 0.25, 0.20, 0.14, 0.09];
 
         let flowChart;
 
-        // index target for opening flow (closest to 0.98)
         function findClosestIndexForValue(arr, target) {
             let bestIdx = 0;
             let bestDiff = Math.abs(arr[0] - target);
@@ -399,93 +387,81 @@
             totalCum: 0,
             ladleRemain: 0,
             ladleInitialized: false,
-            nozzleIndex: {
-            A: 5,
-            B: 5
-           }, // initial will be re-set to opening flow at start
+            nozzleIndex: { A: 5, B: 5 },
             elapsedSec: 0,
             plateLog: [],
             running: false,
-            // timing/metadata
-            flowData: {
-            A: [],
-            B: []
-           },
-          plateStartHead: {
-    A: null,
-    B: null
-},
+            flowData: { A: [], B: [] },
+            plateStartHead: { A: null, B: null },
             heatStartISO: null,
             heatEndISO: null,
             currentPlateStartSec: null,
-            plateTimesSec: {
-                A: 0,
-                B: 0
-            }
+            plateTimesSec: { A: 0, B: 0 }
         };
         let timer = null;
-      function generateIdealCurve(totalTime = 780) {
-    const labels = [];
-    const idealData = [];
 
-    for (let t = 0; t <= totalTime; t++) {
-        labels.push(t);
-        idealData.push(getIdealFlow(t));
-    }
+        function generateIdealCurve(totalTime = 780) {
+            const labels = [];
+            const idealData = [];
 
-    return { labels, idealData };
-}
-
-function initializeChart() {
-    if (flowChart) flowChart.destroy();
-
-    const ideal = generateIdealCurve(800); // full process time
-
-    const ctx = $('flowChart').getContext('2d');
-    flowChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: ideal.labels,
-            datasets: [
-                {
-                    label: 'Actual Flow (t/min)',
-                    data: [],
-                    borderColor: '#1565c0',
-                    fill: true,
-                    tension: 0.15
-                },
-                {
-                    label: 'Ideal Flow (t/min)',
-                    data: ideal.idealData,
-                    borderColor: '#2e7d32',
-                    borderDash: [6, 6],
-                    fill: false,
-                    tension: 0
-                }
-            ]
-        },
-        options: {
-            animation: false,
-            responsive: true,
-            scales: {
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Time (s)'
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: 'Flow (t/min)'
-                    },
-                    beginAtZero: true,
-                    max: 2.8
-                }
+            for (let t = 0; t <= totalTime; t++) {
+                labels.push(t);
+                idealData.push(getIdealFlow(t));
             }
+
+            return { labels, idealData };
         }
-    });
-}
+
+        function initializeChart() {
+            if (flowChart) flowChart.destroy();
+
+            const ideal = generateIdealCurve(800);
+
+            const ctx = $('flowChart').getContext('2d');
+            flowChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ideal.labels,
+                    datasets: [
+                        {
+                            label: 'Actual Flow (t/min)',
+                            data: [],
+                            borderColor: '#1565c0',
+                            fill: true,
+                            tension: 0.15
+                        },
+                        {
+                            label: 'Ideal Flow (t/min)',
+                            data: ideal.idealData,
+                            borderColor: '#2e7d32',
+                            borderDash: [6, 6],
+                            fill: false,
+                            tension: 0
+                        }
+                    ]
+                },
+                options: {
+                    animation: false,
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time (s)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Flow (t/min)'
+                            },
+                            beginAtZero: true,
+                            max: 2.8
+                        }
+                    }
+                }
+            });
+        }
 
         function getCurrentPreset() {
             return state.plate === 'A' ? nozzlePresetsA : nozzlePresetsB;
@@ -521,7 +497,6 @@ function initializeChart() {
         }
 
         function pushLog(row) {
-            // row: {plate, target, actual, timeMin, remarks}
             state.plateLog.push(row);
             document.querySelector('#logTable tbody').insertAdjacentHTML('beforeend',
                 `<tr><td>${row.plate}</td><td>${row.target}</td><td>${row.actual}</td><td>${row.timeMin}</td><td>${row.remarks}</td></tr>`);
@@ -539,92 +514,58 @@ function initializeChart() {
         }
 
         function setOpeningNozzleIndex() {
-            // set nozzleIndex to the index in current preset closest to OPEN_FLOW_TARGET
             const presets = getCurrentPreset();
             const idx = findClosestIndexForValue(presets, OPEN_FLOW_TARGET);
             state.nozzleIndex[state.plate] = idx;
         }
-      // ===============================
-// IDEAL FLOW SLANTED FUNCTION
-// ===============================
-function linearIdeal(t, t1, t2, f1, f2) {
-    if (t <= t1) return f1;
-    if (t >= t2) return f2;
 
-    const frac = (t - t1) / (t2 - t1);
-    return f1 + frac * (f2 - f1);
-}
-// ===============================
-// IDEAL CURVE – PLATE A
-// ===============================
-function getIdealFlowA(t) {
+        function linearIdeal(t, t1, t2, f1, f2) {
+            if (t <= t1) return f1;
+            if (t >= t2) return f2;
 
-    if (t <= 5) return 2.30;
+            const frac = (t - t1) / (t2 - t1);
+            return f1 + frac * (f2 - f1);
+        }
 
-    if (t <= 450)
-        return linearIdeal(t, 5, 450, 1.65, 1.35);
+        function getIdealFlowA(t) {
+            if (t <= 5) return 2.30;
+            if (t <= 450) return linearIdeal(t, 5, 450, 1.65, 1.35);
+            if (t <= 700) return linearIdeal(t, 450, 700, 0.80, 0.70);
+            if (t <= 780) return linearIdeal(t, 701, 780, 0.40, 0.30);
+            return 0;
+        }
 
-    if (t <= 700)
-        return linearIdeal(t, 450, 700, 0.80, 0.70);
+        function getIdealFlowB(t) {
+            if (t <= 5) return 2.30;
+            if (t <= 450) return linearIdeal(t, 5, 450, 1.70, 1.60);
+            if (t <= 700) return linearIdeal(t, 450, 700, 0.80, 0.75);
+            if (t <= 780) return linearIdeal(t, 701, 780, 0.40, 0.35);
+            return 0;
+        }
 
-    if (t <= 780)
-        return linearIdeal(t, 701, 780, 0.40, 0.30);
-
-    return 0;
-}
-// ===============================
-// IDEAL CURVE – PLATE B
-// ===============================      
-      function getIdealFlowB(t) {
-
-    if (t <= 5) return 2.30;
-
-    // Slightly flatter decay (less pressure-head dominance)
-    if (t <= 450)
-        return linearIdeal(t, 5, 450, 1.70, 1.60);
-
-    // Hot top smoother
-    if (t <= 700)
-        return linearIdeal(t, 450, 700, 0.80, 0.75);
-
-    // End tail higher
-    if (t <= 780)
-        return linearIdeal(t, 701, 780, 0.40, 0.35);
-
-    return 0;
-}
-// ===============================
-// PLATE-AWARE IDEAL SELECTOR
-// ===============================
-function getIdealFlow(t) {
-    return state.plate === 'A'
-        ? getIdealFlowA(t)
-        : getIdealFlowB(t);
-}
+        function getIdealFlow(t) {
+            return state.plate === 'A' ? getIdealFlowA(t) : getIdealFlowB(t);
+        }
 
         function startPouring() {
             if (state.running) return;
             const cfg = readInputs();
             if (!state.ladleInitialized) {
-            state.ladleRemain = cfg.ladleWeight;
-            state.totalCum = 0;
-            state.ladleInitialized = true;
+                state.ladleRemain = cfg.ladleWeight;
+                state.totalCum = 0;
+                state.ladleInitialized = true;
             }
-          if (state.plateStartHead.A === null) {
-    state.plateStartHead.A = computeHeadFromMass(cfg.ladleWeight, cfg.density);
-}
+            if (state.plateStartHead.A === null) {
+                state.plateStartHead.A = computeHeadFromMass(cfg.ladleWeight, cfg.density);
+            }
             if (cfg.ladleWeight <= 0) {
                 alert('Please enter a positive Ladle weight to start pouring.');
                 return;
             }
 
-            // ensure opening flow is at ~0.98 t/min when starting
             setOpeningNozzleIndex();
 
-            // if heat hasn't started yet, set start timestamp
             if (!state.heatStartISO) state.heatStartISO = new Date().toISOString();
-
-            // if this is the start of current plate, mark its start second
             if (state.currentPlateStartSec === null) {
                 state.currentPlateStartSec = state.elapsedSec;
             }
@@ -633,32 +574,24 @@ function getIdealFlow(t) {
             timer = setInterval(() => {
                 const h = computeHeadFromMass(state.ladleRemain, cfg.density);
                 const hMax = computeHeadFromMass(cfg.ladleWeight, cfg.density);
-              // store starting head for each plate (only once)
-                const baseFlow = getInterpolatedFlow(
-    state.nozzleIndex[state.plate],
-    100
-);
-             const hRef = state.plateStartHead.A; // global ferrostatic reference
+                const baseFlow = getInterpolatedFlow(state.nozzleIndex[state.plate], 100);
+                const hRef = state.plateStartHead.A;
 
-let flow;
+                let flow;
+                let pressureFactor = (!hRef || hRef <= 0) ? 1 : Math.sqrt(h / hRef);
 
-// normal ferrostatic factor
-let pressureFactor = (!hRef || hRef <= 0)
-    ? 1
-    : Math.sqrt(h / hRef);
+                if (state.plate === 'B') {
+                    pressureFactor = 0.85 + 0.15 * pressureFactor;
+                }
 
-// 🔧 Plate B: reduce pressure-head sensitivity ONLY
-if (state.plate === 'B') {
-    pressureFactor = 0.85 + 0.15 * pressureFactor;
-}
-
-// final flow (base flow remains SAME: 2.31 t/min)
-flow = baseFlow * pressureFactor;
+                flow = baseFlow * pressureFactor;
+                
                 state.flowData[state.plate].push({
-                time: state.elapsedSec,
-                ideal: getIdealFlow(state.elapsedSec),
-                actual: flow
-              });
+                    time: state.elapsedSec,
+                    ideal: getIdealFlow(state.elapsedSec),
+                    actual: flow
+                });
+                
                 const tonPerSec = flow / 60;
 
                 if (state.ladleRemain <= 0.001 || flow <= 0.001) {
@@ -679,8 +612,6 @@ flow = baseFlow * pressureFactor;
 
                 flowChart.data.datasets[0].data[state.elapsedSec] = flow;
                 flowChart.update('none');
-             
-                flowChart.update('none');
                 displayMetrics(flow);
 
                 const cfgTargets = cfg.plateTargets[state.plateIndex];
@@ -700,21 +631,16 @@ flow = baseFlow * pressureFactor;
 
         function openGate() {
             if (!state.running) {
-                // start pouring (startPouring will ensure opening flow is set)
                 startPouring();
                 return;
             }
-            // if running the operator wants to open more (increase flow)
             if (state.nozzleIndex[state.plate] > 0)
-            state.nozzleIndex[state.plate]--;
+                state.nozzleIndex[state.plate]--;
             if (!state.running) {
                 const cfg = readInputs();
                 const h = computeHeadFromMass(state.ladleRemain, cfg.density);
                 const hMax = computeHeadFromMass(cfg.ladleWeight, cfg.density);
-                const baseFlow = getInterpolatedFlow(
-    state.nozzleIndex[state.plate],
-    100
-);
+                const baseFlow = getInterpolatedFlow(state.nozzleIndex[state.plate], 100);
                 const flow = applyPressureCorrection(baseFlow, h, hMax);
                 displayMetrics(flow);
             }
@@ -722,49 +648,36 @@ flow = baseFlow * pressureFactor;
 
         function closeGate() {
             if (state.nozzleIndex[state.plate] < getCurrentPreset().length - 1)
-    state.nozzleIndex[state.plate]++;
+                state.nozzleIndex[state.plate]++;
             else stopPouring();
 
             if (!state.running) {
                 const cfg = readInputs();
                 const h = computeHeadFromMass(state.ladleRemain, cfg.density);
                 const hMax = computeHeadFromMass(cfg.ladleWeight, cfg.density);
-                const baseFlow = getInterpolatedFlow(
-    state.nozzleIndex[state.plate],
-    100
-);
+                const baseFlow = getInterpolatedFlow(state.nozzleIndex[state.plate], 100);
                 const flow = applyPressureCorrection(baseFlow, h, hMax);
                 displayMetrics(flow);
             }
         }
-      
-      function resetChartForNewPlate() {
-    state.elapsedSec = 0;
-    state.currentPlateStartSec = 0;
 
-    const ideal = generateIdealCurve(800);
+        function resetChartForNewPlate() {
+            state.elapsedSec = 0;
+            state.currentPlateStartSec = 0;
 
-    // reset X-axis
-    flowChart.data.labels = ideal.labels;
-
-    // clear actual flow
-    flowChart.data.datasets[0].data = [];
-
-    // reload ideal flow
-    flowChart.data.datasets[1].data = ideal.idealData;
-
-    flowChart.update();
-}
+            const ideal = generateIdealCurve(800);
+            flowChart.data.labels = ideal.labels;
+            flowChart.data.datasets[0].data = [];
+            flowChart.data.datasets[1].data = ideal.idealData;
+            flowChart.update();
+        }
 
         function nextPlate() {
-            // Stop pouring and log the completed plate
             stopPouring();
             const cfg = readInputs();
 
-            // compute plate time for the plate just finished
             const startSec = state.currentPlateStartSec !== null ? state.currentPlateStartSec : 0;
             const plateTimeSec = state.elapsedSec - startSec;
-            // save plate time
             state.plateTimesSec[state.plate] = plateTimeSec;
 
             pushLog({
@@ -775,136 +688,131 @@ flow = baseFlow * pressureFactor;
                 remarks: 'Completed'
             });
 
-            // reset current plate cum and increment plate index
             if (state.plateIndex < 1) {
                 state.plateIndex++;
                 state.plate = 'B';
                 state.plateCum = 0;
               
-               resetChartForNewPlate();
-                // set nozzle index to opening flow for the new plate
+                resetChartForNewPlate();
                 setOpeningNozzleIndex();
-                // reset plate start sec to current elapsedSec so timing for new plate begins now
                 state.currentPlateStartSec = state.elapsedSec;
                 $('metricPlate').innerText = 'B / 0%';
                 $('progressBar').style.width = '0%';
                 alert('✅ Switched to Plate B. Opening flow set to ~0.98 t/min.');
-                // start pouring automatically with opening flow set
                 startPouring();
             } else {
-                // both plates completed
-                // compute any final plate time (though we already stored)
                 state.currentPlateStartSec = null;
                 alert('✅ Both Plates Completed! Use the COMPLETE button for final log.');
             }
         }
 
-       function exportExcel() {
+        function exportExcel() {
+            const wb = XLSX.utils.book_new();
+            
+            const heatNo = $('heatNo').value || 'Heat';
+            const grade = $('grade').value || '';
+            const ladleId = $('ladleId').value || '';
 
-    const wb = XLSX.utils.book_new();
+            const startTime = state.heatStartISO
+                ? new Date(state.heatStartISO).toLocaleString()
+                : '';
 
-    const heatNo = $('heatNo').value || 'Heat';
-    const grade = $('grade').value || '';
-    const ladleId = $('ladleId').value || '';
+            const endTime = state.heatEndISO
+                ? new Date(state.heatEndISO).toLocaleString()
+                : '';
 
-    const startTime = state.heatStartISO
-        ? new Date(state.heatStartISO).toLocaleString()
-        : '';
+            const totalProcessMin = state.heatStartISO && state.heatEndISO
+                ? ((new Date(state.heatEndISO) - new Date(state.heatStartISO)) / 60000).toFixed(2)
+                : '';
 
-    const endTime = state.heatEndISO
-        ? new Date(state.heatEndISO).toLocaleString()
-        : '';
+            const plateATimeMin = (state.plateTimesSec.A / 60).toFixed(2);
+            const plateBTimeMin = (state.plateTimesSec.B / 60).toFixed(2);
 
-    const totalProcessMin = state.heatStartISO && state.heatEndISO
-        ? ((new Date(state.heatEndISO) - new Date(state.heatStartISO)) / 60000).toFixed(2)
-        : '';
+            const summaryData = [
+                ['Heat No:', heatNo],
+                ['Grade:', grade],
+                ['Ladle ID:', ladleId],
+                [],
+                ['Heat Start Time:', startTime],
+                ['Heat End Time:', endTime],
+                ['Total Process Time (min):', totalProcessMin],
+                [],
+                ['Plate A Time (min):', plateATimeMin],
+                ['Plate B Time (min):', plateBTimeMin]
+            ];
 
-    const plateATimeMin = (state.plateTimesSec.A / 60).toFixed(2);
-    const plateBTimeMin = (state.plateTimesSec.B / 60).toFixed(2);
+            const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-    // ===============================
-    // SUMMARY SHEET
-    // ===============================
+            ['A', 'B'].forEach(plate => {
+                const data = state.flowData[plate];
+                if (!data.length) return;
 
-    const summaryData = [
-        ['Heat No:', heatNo],
-        ['Grade:', grade],
-        ['Ladle ID:', ladleId],
-        [],
-        ['Heat Start Time:', startTime],
-        ['Heat End Time:', endTime],
-        ['Total Process Time (min):', totalProcessMin],
-        [],
-        ['Plate A Time (min):', plateATimeMin],
-        ['Plate B Time (min):', plateBTimeMin]
-    ];
+                const rows = [
+                    ['Time (s)', 'Ideal Flow (t/min)', 'Actual Flow (t/min)']
+                ];
 
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+                data.forEach(r => {
+                    rows.push([r.time, r.ideal, r.actual]);
+                });
 
-    // ===============================
-    // PLATE DATA SHEETS
-    // ===============================
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                XLSX.utils.book_append_sheet(wb, ws, `Plate ${plate}`);
+            });
 
-    ['A', 'B'].forEach(plate => {
-
-        const data = state.flowData[plate];
-        if (!data.length) return;
-
-        const rows = [
-            ['Time (s)', 'Ideal Flow (t/min)', 'Actual Flow (t/min)']
-        ];
-
-        data.forEach(r => {
-            rows.push([r.time, r.ideal, r.actual]);
-        });
-
-        const ws = XLSX.utils.aoa_to_sheet(rows);
-        XLSX.utils.book_append_sheet(wb, ws, `Plate ${plate}`);
-    });
-
-    // ===============================
-    // FILE NAME = HEAT NO
-    // ===============================
-
-    XLSX.writeFile(wb, `Heat_${heatNo}.xlsx`);
-}
-
+            // MOBILE-COMPATIBLE EXPORT
+            const excelData = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
+            
+            function s2ab(s) {
+                const buf = new ArrayBuffer(s.length);
+                const view = new Uint8Array(buf);
+                for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+                return buf;
+            }
+            
+            const blob = new Blob([s2ab(excelData)], { 
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+            });
+            
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Heat_${heatNo}.xlsx`;
+            
+            document.body.appendChild(link);
+            link.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }, 100);
+        }
 
         function resetAll() {
-           if (timer) {
-    clearInterval(timer);
-    timer = null;
-}
-           state = {
-    plate: 'A',
-    plateIndex: 0,
-    plateCum: 0,
-    totalCum: 0,
-    ladleRemain: 0,
-    ladleInitialized: false,
-    nozzleIndex:  {
-      A: 5,
-      B: 5  
-      },
-    plateStartHead: {
-    A: null,
-    B: null
-},
-    elapsedSec: 0,
-    plateLog: [],
-    running: false,
-
-    flowData: {
-        A: [],
-        B: []
-    },
-
-    heatStartISO: null,
-    heatEndISO: null,
-    currentPlateStartSec: null,
-    plateTimesSec: { A: 0, B: 0 }
-};
+            if (timer) {
+                clearInterval(timer);
+                timer = null;
+            }
+            
+            state = {
+                plate: 'A',
+                plateIndex: 0,
+                plateCum: 0,
+                totalCum: 0,
+                ladleRemain: 0,
+                ladleInitialized: false,
+                nozzleIndex: { A: 5, B: 5 },
+                plateStartHead: { A: null, B: null },
+                elapsedSec: 0,
+                plateLog: [],
+                running: false,
+                flowData: { A: [], B: [] },
+                heatStartISO: null,
+                heatEndISO: null,
+                currentPlateStartSec: null,
+                plateTimesSec: { A: 0, B: 0 }
+            };
+            
             document.querySelector('#logTable tbody').innerHTML = '';
             $('metricFlow').innerText = '0.00';
             $('metricMass').innerText = '0';
@@ -914,16 +822,15 @@ flow = baseFlow * pressureFactor;
             $('totalPoured').innerText = '0.00';
             $('ladleRem').innerText = '0.00';
             $('heightVals').innerText = 'Pressure head (h) = 0.000 m';
+            
             if (flowChart) {
-            const ideal = generateIdealCurve(780);
-
-            flowChart.data.labels = ideal.labels;
-            flowChart.data.datasets[0].data = [];              // actual clear
-            flowChart.data.datasets[1].data = ideal.idealData; // ideal reload
-
-            flowChart.update();
-            initializeChart();
-}
+                const ideal = generateIdealCurve(780);
+                flowChart.data.labels = ideal.labels;
+                flowChart.data.datasets[0].data = [];
+                flowChart.data.datasets[1].data = ideal.idealData;
+                flowChart.update();
+                initializeChart();
+            }
         }
         
         function logOut() {
@@ -933,16 +840,14 @@ flow = baseFlow * pressureFactor;
                     return;
                 }
             }
-            // 1. Reset all current heat data
+            
             resetAll();
             timer = null;
             flowChart = null;
             
-            // 2. Hide app and show login screen
             $('app-content').style.display = 'none';
             $('login-screen').style.display = 'block';
 
-            // 3. Clear inputs for next login
             $('employeeId').value = '';
             $('password').value = '';
             $('loginMessage').innerText = '';
@@ -951,10 +856,8 @@ flow = baseFlow * pressureFactor;
         function completeProcess() {
             stopPouring();
             const heatNo = $('heatNo').value || 'N/A';
-            // set heat end timestamp
             state.heatEndISO = new Date().toISOString();
 
-            // If current plate is still in progress and wasn't logged, log it
             if (state.currentPlateStartSec !== null && state.plateCum > 0) {
                 const plate = state.plate;
                 const plateTimeSec = state.elapsedSec - state.currentPlateStartSec;
@@ -992,43 +895,41 @@ flow = baseFlow * pressureFactor;
                 if (filter === 'month') return (now - d) / (1000 * 60 * 60 * 24) <= 30;
                 return true;
             });
-            $('historyList').innerHTML = filtered.length ? filtered.map(h => `Heat ${h.heat} | ${h.total} t | ${new Date(h.date).toLocaleDateString()}`).join('<br>') : 'No history available.';
+            $('historyList').innerHTML = filtered.length ? 
+                filtered.map(h => `Heat ${h.heat} | ${h.total} t | ${new Date(h.date).toLocaleDateString()}`).join('<br>') : 
+                'No history available.';
         }
 
-        /* --- Login System Functions --- */
+        function attemptLogin() {
+            const employeeId = $('employeeId').value;
+            const password = $('password').value;
+            const idNum = parseInt(employeeId);
+            const msg = $('loginMessage');
 
-       function attemptLogin() {
-    const employeeId = $('employeeId').value;
-    const password = $('password').value;
-    const idNum = parseInt(employeeId);
-    const msg = $('loginMessage');
+            msg.innerText = '';
 
-    msg.innerText = '';
+            if (employeeId.length !== 4 || isNaN(idNum)) {
+                msg.innerText = 'Employee ID is not matched (xxxx).';
+                return;
+            }
 
-    if (employeeId.length !== 4 || isNaN(idNum)) {
-        msg.innerText = 'Employee ID is not matched (xxxx).';
-        return;
-    }
+            if (idNum < 1999 || idNum > 4999) {
+                msg.innerText = 'Employee ID must be between x and x.';
+                return;
+            }
 
-    if (idNum < 1999 || idNum > 4999) {
-        msg.innerText = 'Employee ID must be between x and x.';
-        return;
-    }
+            if (employeeId !== password) {
+                msg.innerText = 'Password does not match Employee ID.';
+                return;
+            }
 
-    if (employeeId !== password) {
-        msg.innerText = 'Password does not match Employee ID.';
-        return;
-    }
+            $('login-screen').style.display = 'none';
+            $('app-content').style.display = 'block';
 
-    // ✅ Successful Login
-    $('login-screen').style.display = 'none';
-    $('app-content').style.display = 'block';
+            initializeChart();
+            renderHistory();
+        }
 
-    // ✅ THESE MUST BE INSIDE THE FUNCTION
-    initializeChart();
-    renderHistory();
-}
-        // --- Event Listeners and Initial Setup ---
         window.onload = () => {
             $('loginBtn').addEventListener('click', attemptLogin);
             $('employeeId').addEventListener('keypress', (e) => {
@@ -1038,9 +939,7 @@ flow = baseFlow * pressureFactor;
                 if (e.key === 'Enter') attemptLogin();
             });
             
-            // New Log Out listener
             $('logoutBtn').addEventListener('click', logOut);
-
             $('filterSelect').addEventListener('change', renderHistory);
             $('openBtn').addEventListener('click', openGate);
             $('closeBtn').addEventListener('click', closeGate);
@@ -1054,6 +953,4 @@ flow = baseFlow * pressureFactor;
         };
     </script>
 </body>
-
 </html>
-
