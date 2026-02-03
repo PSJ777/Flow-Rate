@@ -707,86 +707,116 @@
         }
 
         function exportExcel() {
-            const wb = XLSX.utils.book_new();
-            
-            const heatNo = $('heatNo').value || 'Heat';
-            const grade = $('grade').value || '';
-            const ladleId = $('ladleId').value || '';
+    const wb = XLSX.utils.book_new();
+    
+    const heatNo = $('heatNo').value || 'Heat';
+    const grade = $('grade').value || '';
+    const ladleId = $('ladleId').value || '';
 
-            const startTime = state.heatStartISO
-                ? new Date(state.heatStartISO).toLocaleString()
-                : '';
+    const startTime = state.heatStartISO
+        ? new Date(state.heatStartISO).toLocaleString()
+        : '';
 
-            const endTime = state.heatEndISO
-                ? new Date(state.heatEndISO).toLocaleString()
-                : '';
+    const endTime = state.heatEndISO
+        ? new Date(state.heatEndISO).toLocaleString()
+        : '';
 
-            const totalProcessMin = state.heatStartISO && state.heatEndISO
-                ? ((new Date(state.heatEndISO) - new Date(state.heatStartISO)) / 60000).toFixed(2)
-                : '';
+    const totalProcessMin = state.heatStartISO && state.heatEndISO
+        ? ((new Date(state.heatEndISO) - new Date(state.heatStartISO)) / 60000).toFixed(2)
+        : '';
 
-            const plateATimeMin = (state.plateTimesSec.A / 60).toFixed(2);
-            const plateBTimeMin = (state.plateTimesSec.B / 60).toFixed(2);
+    const plateATimeMin = (state.plateTimesSec.A / 60).toFixed(2);
+    const plateBTimeMin = (state.plateTimesSec.B / 60).toFixed(2);
 
-            const summaryData = [
-                ['Heat No:', heatNo],
-                ['Grade:', grade],
-                ['Ladle ID:', ladleId],
-                [],
-                ['Heat Start Time:', startTime],
-                ['Heat End Time:', endTime],
-                ['Total Process Time (min):', totalProcessMin],
-                [],
-                ['Plate A Time (min):', plateATimeMin],
-                ['Plate B Time (min):', plateBTimeMin]
-            ];
+    const summaryData = [
+        ['Heat No:', heatNo],
+        ['Grade:', grade],
+        ['Ladle ID:', ladleId],
+        [],
+        ['Heat Start Time:', startTime],
+        ['Heat End Time:', endTime],
+        ['Total Process Time (min):', totalProcessMin],
+        [],
+        ['Plate A Time (min):', plateATimeMin],
+        ['Plate B Time (min):', plateBTimeMin]
+    ];
 
-            const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-            XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-            ['A', 'B'].forEach(plate => {
-                const data = state.flowData[plate];
-                if (!data.length) return;
+    ['A', 'B'].forEach(plate => {
+        const data = state.flowData[plate];
+        if (!data.length) return;
 
-                const rows = [
-                    ['Time (s)', 'Ideal Flow (t/min)', 'Actual Flow (t/min)']
-                ];
+        const rows = [
+            ['Time (s)', 'Ideal Flow (t/min)', 'Actual Flow (t/min)']
+        ];
 
-                data.forEach(r => {
-                    rows.push([r.time, r.ideal, r.actual]);
-                });
+        data.forEach(r => {
+            rows.push([r.time, r.ideal, r.actual]);
+        });
 
-                const ws = XLSX.utils.aoa_to_sheet(rows);
-                XLSX.utils.book_append_sheet(wb, ws, `Plate ${plate}`);
-            });
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        XLSX.utils.book_append_sheet(wb, ws, `Plate ${plate}`);
+    });
 
-            // MOBILE-COMPATIBLE EXPORT
-            const excelData = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
-            
-            function s2ab(s) {
-                const buf = new ArrayBuffer(s.length);
-                const view = new Uint8Array(buf);
-                for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
-                return buf;
-            }
-            
-            const blob = new Blob([s2ab(excelData)], { 
-                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-            });
-            
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `Heat_${heatNo}.xlsx`;
-            
-            document.body.appendChild(link);
-            link.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-            }, 100);
+    // MOBILE-COMPATIBLE EXPORT - FIXED VERSION
+    try {
+        // Generate Excel file as binary string
+        const excelData = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
+        
+        // Convert to Uint8Array
+        const buffer = new ArrayBuffer(excelData.length);
+        const view = new Uint8Array(buffer);
+        for (let i = 0; i < excelData.length; i++) {
+            view[i] = excelData.charCodeAt(i) & 0xFF;
         }
+        
+        // Create blob with proper MIME type
+        const blob = new Blob([buffer], { 
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        
+        // Set file name
+        const fileName = `Heat_${heatNo}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        link.download = fileName;
+        
+        // Add to page and click
+        document.body.appendChild(link);
+        
+        // For iOS devices, we need to open in a new window
+        if (navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                window.open(e.target.result);
+            };
+            reader.readAsDataURL(blob);
+        } else {
+            // For Android and desktop
+            link.click();
+        }
+        
+        // Clean up
+        setTimeout(() => {
+            if (link.parentNode) {
+                link.parentNode.removeChild(link);
+            }
+            window.URL.revokeObjectURL(url);
+        }, 100);
+        
+        // Show success message
+        alert(`✅ Excel file "${fileName}" has been downloaded successfully!`);
+        
+    } catch (error) {
+        console.error('Export error:', error);
+        alert('❌ Could not export file. Please try again or check browser permissions.');
+    }
+}
 
         function resetAll() {
             if (timer) {
