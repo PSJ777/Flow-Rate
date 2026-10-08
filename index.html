@@ -705,11 +705,10 @@
     }
 
     /* ============================================================
-       ✅ FIXED EXPORT FUNCTION — works in browser AND Android app
-       Only this function was changed. Everything else is identical.
+       ✅ FINAL EXPORT FUNCTION — tries every possible method
        ============================================================ */
     function exportExcel() {
-      // ---- Build workbook (identical to before) ----
+      // ---- Build workbook (same as before) ----
       const wb = XLSX.utils.book_new();
       const heatNo = $('heatNo').value || 'Heat';
       const grade = $('grade').value || '';
@@ -717,7 +716,6 @@
 
       const startTime = state.heatStartISO ?
         new Date(state.heatStartISO).toLocaleString() : '';
-
       const endTime = state.heatEndISO ?
         new Date(state.heatEndISO).toLocaleString() : '';
 
@@ -752,19 +750,17 @@
         XLSX.utils.book_append_sheet(wb, ws, `Plate ${plate}`);
       });
 
-      // ---- Prepare file data ----
+      // ---- Prepare file ----
       const fileName = `Heat_${heatNo}.xlsx`;
       const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-      // Write as base64 — universally supported by xlsx lib
+      // Write as base64 (most compatible)
       const base64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
 
-      // Build both a Blob and a data-URL from the same base64
+      // Build Blob and Data URL
       const byteChars = atob(base64);
       const bytes = new Uint8Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) {
-        bytes[i] = byteChars.charCodeAt(i);
-      }
+      for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
       const blob = new Blob([bytes], { type: mime });
       const blobUrl = URL.createObjectURL(blob);
       const dataUrl = 'data:' + mime + ';base64,' + base64;
@@ -772,79 +768,65 @@
       // Detect environment
       const ua = navigator.userAgent || '';
       const isAndroid = /Android/i.test(ua);
-      const isIOS = /iPhone|iPad|iPod/i.test(ua);
-      const isMobile = isAndroid || isIOS || /Mobile/i.test(ua);
-      const isWebView = isAndroid && (
-        /\bwv\b/i.test(ua) ||
-        /Version\/[\d.]+ Chrome\//.test(ua) ||
-        (!/Chrome\//.test(ua) && !/Firefox\//.test(ua) && !/EdgA\//.test(ua))
-      );
+      const isWebView = isAndroid && (/\bwv\b/i.test(ua) || /Version\/[\d.]+ Chrome\//.test(ua) || (!/Chrome\//.test(ua) && !/Firefox\//.test(ua)));
 
-      // Helper: trigger a download using an <a download> element
-      function anchorDownload(url, useTargetBlank) {
+      // Helper to trigger download via anchor
+      function anchorDownload(url, targetBlank) {
         const a = document.createElement('a');
         a.href = url;
         a.download = fileName;
         a.rel = 'noopener';
-        if (useTargetBlank) a.target = '_blank';
+        if (targetBlank) a.target = '_blank';
         a.style.display = 'none';
         document.body.appendChild(a);
         a.click();
-        setTimeout(() => {
-          if (a.parentNode) a.parentNode.removeChild(a);
-        }, 1500);
+        setTimeout(() => { if (a.parentNode) a.parentNode.removeChild(a); }, 1500);
+      }
+
+      // Helper to trigger download via iframe
+      function iframeDownload(url) {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = url;
+        document.body.appendChild(iframe);
+        setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 2000);
       }
 
       // ---- Strategy ----
-      // 1) Inside an Android WebView: try the native Share Sheet first.
-      //    The user can then choose "Save to Files" / "Downloads" / Drive etc.
-      //    This is the most reliable path when the WebView's DownloadListener
-      //    does not handle blob: / data: URLs.
-      // 2) Otherwise (normal browser, desktop, mobile Chrome): do a direct
-      //    download via Blob URL — this is what browsers expect.
-      // 3) Fallback: data-URL download (some older WebViews handle this better).
-
-      if (isWebView && typeof navigator.canShare === 'function') {
+      // 1. If in WebView and Web Share API is available, use it first.
+      if (isWebView && navigator.share && navigator.canShare) {
         try {
           const file = new File([blob], fileName, { type: mime });
           if (navigator.canShare({ files: [file] })) {
-            navigator.share({
-              files: [file],
-              title: fileName,
-              text: 'Heat ' + heatNo + ' export'
-            }).catch(() => {
-              // User cancelled or share failed → try data-URL download
-              anchorDownload(dataUrl, true);
-            });
+            navigator.share({ files: [file], title: fileName, text: 'Heat ' + heatNo + ' export' })
+              .catch(() => {
+                // Share failed or cancelled → try direct downloads
+                anchorDownload(blobUrl, false);
+                setTimeout(() => anchorDownload(dataUrl, true), 500);
+                setTimeout(() => iframeDownload(dataUrl), 1000);
+              });
             setTimeout(() => URL.revokeObjectURL(blobUrl), 20000);
             return;
           }
-        } catch (e) {
-          // fall through to download path
-        }
+        } catch (e) { /* fall through */ }
       }
 
-      // Normal browser path: Blob URL download
+      // 2. Try Blob download
       try {
         anchorDownload(blobUrl, false);
-      } catch (e) {
-        // Blob download not supported → data URL fallback
-        try {
-          anchorDownload(dataUrl, true);
-        } catch (e2) {
-          alert('Download not supported on this device: ' + e2.message);
-        }
-      }
+      } catch (e) { /* ignore */ }
 
-      // If we're in a WebView that didn't use share, also try data URL
-      // (short delay so the browser-style blob download gets a chance first)
-      if (isWebView) {
-        setTimeout(() => {
-          try { anchorDownload(dataUrl, true); } catch (e) { /* ignore */ }
-        }, 800);
-      }
+      // 3. Try Data URL download after a short delay (for WebViews that ignore Blob)
+      setTimeout(() => {
+        try { anchorDownload(dataUrl, true); } catch (e) { /* ignore */ }
+      }, 400);
 
-      // Clean up the blob URL after the download has had time to complete
+      // 4. Try iframe download as a last resort
+      setTimeout(() => {
+        try { iframeDownload(dataUrl); } catch (e) { /* ignore */ }
+      }, 900);
+
+      // Clean up blob URL later
       setTimeout(() => URL.revokeObjectURL(blobUrl), 20000);
     }
 
