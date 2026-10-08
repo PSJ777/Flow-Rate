@@ -1,73 +1,103 @@
 <!doctype html>
-        total: state.totalCum.toFixed(2)
-      };
-      const history = JSON.parse(localStorage.getItem('heatHistory') || '[]');
-      history.push(record);
-      localStorage.setItem('heatHistory', JSON.stringify(history));
-      alert('✅ Casting Completed & Saved to History!');
-      renderHistory();
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Flow Rate Monitoring App</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"> </script>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #fff;
+      --accent: #1565c0;
+      --ok: #2e7d32;
+      --warn: #fbc02d;
+      --danger: #c62828;
+      --muted: #6b7280;
+      font-family: Inter, system-ui, Segoe UI, Roboto, Arial;
     }
 
-    function renderHistory() {
-      const hist = JSON.parse(localStorage.getItem('heatHistory') || '[]');
-      const filter = $('filterSelect').value;
-      const now = new Date();
-      const filtered = hist.filter(h => {
-        const d = new Date(h.date);
-        if (filter === 'week') return (now - d) / (1000 * 60 * 60 * 24) <= 7;
-        if (filter === 'month') return (now - d) / (1000 * 60 * 60 * 24) <= 30;
-        return true;
-      });
-      $('historyList').innerHTML = filtered.length ? filtered.map(h => `Heat ${h.heat} | ${h.total} t | ${new Date(h.date).toLocaleDateString()}`).join('<br>') : 'No history available.';
+    body {
+      background: var(--bg);
+      margin: 0;
+      padding: 18px;
+      color: #111;
     }
-    /* --- Login System Functions --- */
-    function attemptLogin() {
-      const employeeId = $('employeeId').value;
-      const password = $('password').value;
-      const idNum = parseInt(employeeId);
-      const msg = $('loginMessage');
-      msg.innerText = '';
-      if (employeeId.length !== 4 || isNaN(idNum)) {
-        msg.innerText = 'Employee ID is not matched (xxxx).';
-        return;
-      }
-      if (idNum < 1999 || idNum > 4999) {
-        msg.innerText = 'Employee ID must be between x and x.';
-        return;
-      }
-      if (employeeId !== password) {
-        msg.innerText = 'Password does not match Employee ID.';
-        return;
-      }
-      // ✅ Successful Login
-      $('login-screen').style.display = 'none';
-      $('app-content').style.display = 'block';
-      // ✅ THESE MUST BE INSIDE THE FUNCTION
-      initializeChart();
-      renderHistory();
-    }
-    // --- Event Listeners and Initial Setup ---
-    window.onload = () => {
-      $('loginBtn').addEventListener('click', attemptLogin);
-      $('employeeId').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') attemptLogin();
-      });
-      $('password').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') attemptLogin();
-      });
-      // New Log Out listener
-      $('logoutBtn').addEventListener('click', logOut);
-      $('filterSelect').addEventListener('change', renderHistory);
-      $('openBtn').addEventListener('click', openGate);
-      $('closeBtn').addEventListener('click', closeGate);
-      $('nextPlateBtn').addEventListener('click', nextPlate);
-      $('exportCSV').addEventListener('click', exportExcel);
-      $('resetBtn').addEventListener('click', resetAll);
-      $('completeBtn').addEventListener('click', completeProcess);
-      displayMetrics(0.00);
-      updateSummary();
-    };
-  </script>
-</body>
 
+    .container {
+      max-width: 1250px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      padding: 14px;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    input {
+      width: 100%;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #e6e9ef;
+      margin-top: 6px;
+      box-sizing: border-box;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .row>* {
+      flex: 1;
+    }
+
+    button {
+      border: 0;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      color: white;
+      font-weight: 600;
+      margin-top: 10px;
+      width: 100%;
+      font-size: 14px;
+    }
+
+    .openBtn {
+      background: var(--ok);
+    }
+
+    .closeBtn {
+      background: var(--danger);
+    }
+
+    .nextplate {
+      background: #9e9e9e;
+    }
+
+    .reset {
+      background: var(--warn);
 </html>
