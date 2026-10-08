@@ -107,10 +107,8 @@
       background: var(--ok);
     }
 
-    /* New button style for Log Out */
     .logoutBtn {
       background: #616161;
-      /* Darker gray for contrast */
       margin-top: 10px;
     }
 
@@ -187,10 +185,8 @@
       border: 1px solid #ccc;
     }
 
-    /* --- New/Modified Styles for Login and Image --- */
     #app-content {
       display: none;
-      /* Hide the app initially */
     }
 
     .login-box {
@@ -230,15 +226,12 @@
       border: 1px solid #ddd;
     }
 
-    /* --- CSS to remove up/down arrows from number input (Employee ID) --- */
-    /* For Chrome, Safari, Edge, Opera */
     #employeeId::-webkit-outer-spin-button,
     #employeeId::-webkit-inner-spin-button {
       -webkit-appearance: none;
       margin: 0;
     }
 
-    /* For Firefox */
     #employeeId[type=number] {
       -moz-appearance: textfield;
     }
@@ -373,7 +366,6 @@
 
     let flowChart;
 
-    // index target for opening flow (closest to 0.98)
     function findClosestIndexForValue(arr, target) {
       let bestIdx = 0;
       let bestDiff = Math.abs(arr[0] - target);
@@ -396,11 +388,10 @@
       totalCum: 0,
       ladleRemain: 0,
       ladleInitialized: false,
-      nozzleIndex: { A: 5, B: 5 }, // initial will be re-set to opening flow at start
+      nozzleIndex: { A: 5, B: 5 },
       elapsedSec: 0,
       plateLog: [],
       running: false,
-      // timing/metadata
       flowData: { A: [], B: [] },
       plateStartHead: { A: null, B: null },
       heatStartISO: null,
@@ -423,7 +414,7 @@
 
     function initializeChart() {
       if (flowChart) flowChart.destroy();
-      const ideal = generateIdealCurve(840); // full process time
+      const ideal = generateIdealCurve(840);
       const ctx = $('flowChart').getContext('2d');
       flowChart = new Chart(ctx, {
         type: 'line',
@@ -488,7 +479,6 @@
     }
 
     function pushLog(row) {
-      // row: {plate, target, actual, timeMin, remarks}
       state.plateLog.push(row);
       document.querySelector('#logTable tbody').insertAdjacentHTML('beforeend',
         `<tr><td>${row.plate}</td><td>${row.target}</td><td>${row.actual}</td><td>${row.timeMin}</td><td>${row.remarks}</td></tr>`);
@@ -506,15 +496,11 @@
     }
 
     function setOpeningNozzleIndex() {
-      // set nozzleIndex to the index in current preset closest to OPEN_FLOW_TARGET
       const presets = getCurrentPreset();
       const idx = findClosestIndexForValue(presets, OPEN_FLOW_TARGET);
       state.nozzleIndex[state.plate] = idx;
     }
 
-    // ===============================
-    // IDEAL FLOW SLANTED FUNCTION
-    // ===============================
     function linearIdeal(t, t1, t2, f1, f2) {
       if (t <= t1) return f1;
       if (t >= t2) return f2;
@@ -522,9 +508,6 @@
       return f1 + frac * (f2 - f1);
     }
 
-    // ===============================
-    // IDEAL CURVE – PLATE A
-    // ===============================
     function getIdealFlowA(t) {
       if (t <= 5) return 2.30;
       if (t <= 480) return linearIdeal(t, 5, 480, 1.70, 1.35);
@@ -533,23 +516,14 @@
       return 0;
     }
 
-    // ===============================
-    // IDEAL CURVE – PLATE B
-    // ===============================
     function getIdealFlowB(t) {
       if (t <= 5) return 2.30;
-      // Slightly flatter decay (less pressure-head dominance)
       if (t <= 480) return linearIdeal(t, 5, 480, 1.70, 1.55);
-      // Hot top smoother
       if (t <= 700) return linearIdeal(t, 480, 700, 0.70, 0.60);
-      // End tail higher
       if (t <= 780) return linearIdeal(t, 701, 780, 0.40, 0.35);
       return 0;
     }
 
-    // ===============================
-    // PLATE-AWARE IDEAL SELECTOR
-    // ===============================
     function getIdealFlow(t) {
       return state.plate === 'A' ? getIdealFlowA(t) : getIdealFlowB(t);
     }
@@ -573,13 +547,10 @@
         return;
       }
 
-      // ensure opening flow is at ~0.98 t/min when starting
       setOpeningNozzleIndex();
 
-      // if heat hasn't started yet, set start timestamp
       if (!state.heatStartISO) state.heatStartISO = new Date().toISOString();
 
-      // if this is the start of current plate, mark its start second
       if (state.currentPlateStartSec === null) {
         state.currentPlateStartSec = state.elapsedSec;
       }
@@ -590,25 +561,20 @@
         const h = computeHeadFromMass(state.ladleRemain, cfg.density);
         const hMax = computeHeadFromMass(cfg.ladleWeight, cfg.density);
 
-        // store starting head for each plate (only once)
         const baseFlow = getInterpolatedFlow(
           state.nozzleIndex[state.plate],
           100
         );
 
-        const hRef = state.plateStartHead.A; // global ferrostatic reference
+        const hRef = state.plateStartHead.A;
 
         let flow;
-
-        // normal ferrostatic factor
         let pressureFactor = (!hRef || hRef <= 0) ? 1 : Math.sqrt(h / hRef);
 
-        // 🔧 Plate B: reduce pressure-head sensitivity ONLY
         if (state.plate === 'B') {
           pressureFactor = 0.85 + 0.15 * pressureFactor;
         }
 
-        // final flow (base flow remains SAME: 2.31 t/min)
         flow = baseFlow * pressureFactor;
 
         state.flowData[state.plate].push({
@@ -661,21 +627,16 @@
 
     function openGate() {
       if (!state.running) {
-        // start pouring (startPouring will ensure opening flow is set)
         startPouring();
         return;
       }
-      // if running the operator wants to open more (increase flow)
       if (state.nozzleIndex[state.plate] > 0) state.nozzleIndex[state.plate]--;
 
       if (!state.running) {
         const cfg = readInputs();
         const h = computeHeadFromMass(state.ladleRemain, cfg.density);
         const hMax = computeHeadFromMass(cfg.ladleWeight, cfg.density);
-        const baseFlow = getInterpolatedFlow(
-          state.nozzleIndex[state.plate],
-          100
-        );
+        const baseFlow = getInterpolatedFlow(state.nozzleIndex[state.plate], 100);
         const flow = applyPressureCorrection(baseFlow, h, hMax);
         displayMetrics(flow);
       }
@@ -690,10 +651,7 @@
         const cfg = readInputs();
         const h = computeHeadFromMass(state.ladleRemain, cfg.density);
         const hMax = computeHeadFromMass(cfg.ladleWeight, cfg.density);
-        const baseFlow = getInterpolatedFlow(
-          state.nozzleIndex[state.plate],
-          100
-        );
+        const baseFlow = getInterpolatedFlow(state.nozzleIndex[state.plate], 100);
         const flow = applyPressureCorrection(baseFlow, h, hMax);
         displayMetrics(flow);
       }
@@ -702,31 +660,18 @@
     function resetChartForNewPlate() {
       state.elapsedSec = 0;
       state.currentPlateStartSec = 0;
-
-      const ideal = generateIdealCurve(840); // reset X-axis
-
+      const ideal = generateIdealCurve(840);
       flowChart.data.labels = ideal.labels;
-
-      // clear actual flow
       flowChart.data.datasets[0].data = [];
-
-      // reload ideal flow
       flowChart.data.datasets[1].data = ideal.idealData;
-
       flowChart.update();
     }
 
     function nextPlate() {
-      // Stop pouring and log the completed plate
       stopPouring();
-
       const cfg = readInputs();
-
-      // compute plate time for the plate just finished
       const startSec = state.currentPlateStartSec !== null ? state.currentPlateStartSec : 0;
       const plateTimeSec = state.elapsedSec - startSec;
-
-      // save plate time
       state.plateTimesSec[state.plate] = plateTimeSec;
 
       pushLog({
@@ -737,18 +682,14 @@
         remarks: 'Completed'
       });
 
-      // reset current plate cum and increment plate index
       if (state.plateIndex < 1) {
         state.plateIndex++;
         state.plate = 'B';
         state.plateCum = 0;
 
         resetChartForNewPlate();
-
-        // set nozzle index to opening flow for the new plate
         setOpeningNozzleIndex();
 
-        // reset plate start sec to current elapsedSec so timing for new plate begins now
         state.currentPlateStartSec = state.elapsedSec;
 
         $('metricPlate').innerText = 'B / 0%';
@@ -756,23 +697,20 @@
 
         alert('✅ Switched to Plate B. Opening flow set to ~0.98 t/min.');
 
-        // start pouring automatically with opening flow set
         startPouring();
       } else {
-        // both plates completed
-        // compute any final plate time (though we already stored)
         state.currentPlateStartSec = null;
         alert('✅ Both Plates Completed! Use the COMPLETE button for final log.');
       }
     }
 
     /* ============================================================
-       ✅ FIXED EXPORT FUNCTION (mobile / Android WebView friendly)
+       ✅ FIXED EXPORT FUNCTION — works in browser AND Android app
        Only this function was changed. Everything else is identical.
        ============================================================ */
     function exportExcel() {
+      // ---- Build workbook (identical to before) ----
       const wb = XLSX.utils.book_new();
-
       const heatNo = $('heatNo').value || 'Heat';
       const grade = $('grade').value || '';
       const ladleId = $('ladleId').value || '';
@@ -789,9 +727,6 @@
       const plateATimeMin = (state.plateTimesSec.A / 60).toFixed(2);
       const plateBTimeMin = (state.plateTimesSec.B / 60).toFixed(2);
 
-      // ===============================
-      // SUMMARY SHEET
-      // ===============================
       const summaryData = [
         ['Heat No:', heatNo],
         ['Grade:', grade],
@@ -808,88 +743,109 @@
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-      // ===============================
-      // PLATE DATA SHEETS
-      // ===============================
       ['A', 'B'].forEach(plate => {
         const data = state.flowData[plate];
-
         if (!data.length) return;
-
-        const rows = [
-          ['Time (s)', 'Ideal Flow (t/min)', 'Actual Flow (t/min)']
-        ];
-
-        data.forEach(r => {
-          rows.push([r.time, r.ideal, r.actual]);
-        });
-
+        const rows = [['Time (s)', 'Ideal Flow (t/min)', 'Actual Flow (t/min)']];
+        data.forEach(r => { rows.push([r.time, r.ideal, r.actual]); });
         const ws = XLSX.utils.aoa_to_sheet(rows);
         XLSX.utils.book_append_sheet(wb, ws, `Plate ${plate}`);
       });
 
-      // ===============================
-      // FILE NAME = HEAT NO
-      // ===============================
+      // ---- Prepare file data ----
       const fileName = `Heat_${heatNo}.xlsx`;
       const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-      // Build the file as base64 (works everywhere, no blob: URL needed)
+      // Write as base64 — universally supported by xlsx lib
       const base64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
 
-      // base64 -> Uint8Array -> Blob
+      // Build both a Blob and a data-URL from the same base64
       const byteChars = atob(base64);
       const bytes = new Uint8Array(byteChars.length);
       for (let i = 0; i < byteChars.length; i++) {
         bytes[i] = byteChars.charCodeAt(i);
       }
       const blob = new Blob([bytes], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      const dataUrl = 'data:' + mime + ';base64,' + base64;
 
-      // ---------- METHOD 1: Web Share API (best inside Android app/WebView) ----------
-      try {
-        if (navigator.canShare) {
+      // Detect environment
+      const ua = navigator.userAgent || '';
+      const isAndroid = /Android/i.test(ua);
+      const isIOS = /iPhone|iPad|iPod/i.test(ua);
+      const isMobile = isAndroid || isIOS || /Mobile/i.test(ua);
+      const isWebView = isAndroid && (
+        /\bwv\b/i.test(ua) ||
+        /Version\/[\d.]+ Chrome\//.test(ua) ||
+        (!/Chrome\//.test(ua) && !/Firefox\//.test(ua) && !/EdgA\//.test(ua))
+      );
+
+      // Helper: trigger a download using an <a download> element
+      function anchorDownload(url, useTargetBlank) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.rel = 'noopener';
+        if (useTargetBlank) a.target = '_blank';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          if (a.parentNode) a.parentNode.removeChild(a);
+        }, 1500);
+      }
+
+      // ---- Strategy ----
+      // 1) Inside an Android WebView: try the native Share Sheet first.
+      //    The user can then choose "Save to Files" / "Downloads" / Drive etc.
+      //    This is the most reliable path when the WebView's DownloadListener
+      //    does not handle blob: / data: URLs.
+      // 2) Otherwise (normal browser, desktop, mobile Chrome): do a direct
+      //    download via Blob URL — this is what browsers expect.
+      // 3) Fallback: data-URL download (some older WebViews handle this better).
+
+      if (isWebView && typeof navigator.canShare === 'function') {
+        try {
           const file = new File([blob], fileName, { type: mime });
           if (navigator.canShare({ files: [file] })) {
             navigator.share({
               files: [file],
               title: fileName,
-              text: `Heat ${heatNo} export`
-            }).catch(() => { /* user cancelled - ignore */ });
+              text: 'Heat ' + heatNo + ' export'
+            }).catch(() => {
+              // User cancelled or share failed → try data-URL download
+              anchorDownload(dataUrl, true);
+            });
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 20000);
             return;
           }
+        } catch (e) {
+          // fall through to download path
         }
-      } catch (e) { /* continue to next method */ }
-
-      // ---------- METHOD 2: Blob + anchor download ----------
-      try {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        }, 3000);
-        return;
-      } catch (e) { /* continue to next method */ }
-
-      // ---------- METHOD 3: Data URL fallback ----------
-      try {
-        const link = document.createElement('a');
-        link.href = 'data:' + mime + ';base64,' + base64;
-        link.download = fileName;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          document.body.removeChild(link);
-        }, 3000);
-      } catch (e) {
-        alert('Download not supported in this app. Please open in Chrome or add a native download handler.');
       }
+
+      // Normal browser path: Blob URL download
+      try {
+        anchorDownload(blobUrl, false);
+      } catch (e) {
+        // Blob download not supported → data URL fallback
+        try {
+          anchorDownload(dataUrl, true);
+        } catch (e2) {
+          alert('Download not supported on this device: ' + e2.message);
+        }
+      }
+
+      // If we're in a WebView that didn't use share, also try data URL
+      // (short delay so the browser-style blob download gets a chance first)
+      if (isWebView) {
+        setTimeout(() => {
+          try { anchorDownload(dataUrl, true); } catch (e) { /* ignore */ }
+        }, 800);
+      }
+
+      // Clean up the blob URL after the download has had time to complete
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 20000);
     }
 
     function resetAll() {
@@ -927,8 +883,8 @@
       if (flowChart) {
         const ideal = generateIdealCurve(780);
         flowChart.data.labels = ideal.labels;
-        flowChart.data.datasets[0].data = [];   // actual clear
-        flowChart.data.datasets[1].data = ideal.idealData; // ideal reload
+        flowChart.data.datasets[0].data = [];
+        flowChart.data.datasets[1].data = ideal.idealData;
         flowChart.update();
         initializeChart();
       }
@@ -940,16 +896,13 @@
         if (!confirmLogOut) { return; }
       }
 
-      // 1. Reset all current heat data
       resetAll();
       timer = null;
       flowChart = null;
 
-      // 2. Hide app and show login screen
       $('app-content').style.display = 'none';
       $('login-screen').style.display = 'block';
 
-      // 3. Clear inputs for next login
       $('employeeId').value = '';
       $('password').value = '';
       $('loginMessage').innerText = '';
@@ -959,11 +912,8 @@
       stopPouring();
 
       const heatNo = $('heatNo').value || 'N/A';
-
-      // set heat end timestamp
       state.heatEndISO = new Date().toISOString();
 
-      // If current plate is still in progress and wasn't logged, log it
       if (state.currentPlateStartSec !== null && state.plateCum > 0) {
         const plate = state.plate;
         const plateTimeSec = state.elapsedSec - state.currentPlateStartSec;
@@ -1010,7 +960,6 @@
         : 'No history available.';
     }
 
-    /* --- Login System Functions --- */
     function attemptLogin() {
       const employeeId = $('employeeId').value;
       const password = $('password').value;
@@ -1032,16 +981,13 @@
         return;
       }
 
-      // ✅ Successful Login
       $('login-screen').style.display = 'none';
       $('app-content').style.display = 'block';
 
-      // ✅ THESE MUST BE INSIDE THE FUNCTION
       initializeChart();
       renderHistory();
     }
 
-    // --- Event Listeners and Initial Setup ---
     window.onload = () => {
       $('loginBtn').addEventListener('click', attemptLogin);
 
@@ -1052,7 +998,6 @@
         if (e.key === 'Enter') attemptLogin();
       });
 
-      // New Log Out listener
       $('logoutBtn').addEventListener('click', logOut);
 
       $('filterSelect').addEventListener('change', renderHistory);
